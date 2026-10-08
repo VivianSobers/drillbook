@@ -81,6 +81,10 @@ docker run --rm --network host -v "$PWD:/work" ghcr.io/viviansobers/drillbook:v0
 
 Mount the directory that holds `drillbook.yaml`, the drills and the runbooks at `/work`, along with the kubeconfig and SSH key it names.
 
+### In the cluster
+
+The [Helm chart](charts/drillbook) runs drills as a CronJob with a namespaced service account. It covers drills that only need the cluster, meaning Kubernetes faults and `runner` blocks.
+
 ## Writing a runbook
 
 Runbooks stay ordinary markdown for people. drillbook only reads fenced code blocks that carry a `drill` attribute, written in [Runme](https://runme.dev)'s attribute syntax so the same file stays runnable in Runme:
