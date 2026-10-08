@@ -1,0 +1,45 @@
+# Cluster-only drills: Kubernetes faults and runner blocks (kubectl). Host
+# faults need SSH and Ansible and belong on a runner outside the cluster.
+
+image:
+  repository: ghcr.io/viviansobers/drillbook
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# When the drills run (cron syntax, UTC).
+schedule: "17 4 * * 1"
+# Arguments to drillbook. Name drills instead of --all to run a subset.
+args: ["run", "--all"]
+
+# Contents of drillbook.yaml. kubeconfig is left out so drillbook uses the
+# pod's service account.
+config:
+  prometheus: http://kps-kube-prometheus-stack-prometheus.monitoring:9090
+  alertmanager: http://kps-kube-prometheus-stack-alertmanager.monitoring:9093
+  poll_interval: 15s
+  allow:
+    namespaces: []
+
+# Drill files, keyed by file name. Their runbook paths resolve as ../runbooks/<name>.
+drills: {}
+# Runbooks, keyed by file name.
+runbooks: {}
+
+rbac:
+  # Grant the service account what drills and runbook blocks need in each
+  # namespace listed in config.allow.namespaces.
+  create: true
+
+# Open and close GitHub issues for failing drills.
+githubIssues:
+  repo: ""
+  # Secret holding the token under the key "token".
+  tokenSecret: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

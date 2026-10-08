@@ -1,0 +1,10 @@
+apiVersion: v2
+name: drillbook
+description: Runs drillbook fire drills against Kubernetes Deployments on a schedule.
+type: application
+version: 0.1.0
+appVersion: v0.1.0
+home: https://github.com/VivianSobers/drillbook
+sources:
+  - https://github.com/VivianSobers/drillbook
+keywords: [drills, sre, prometheus, alertmanager, runbooks]
