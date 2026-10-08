@@ -54,3 +54,19 @@ Existing tools check parts of this. `promtool test rules` checks rule logic agai
 | `inconclusive` | The alert also cleared without the runbook |
 | `revert-failed` | drillbook could not undo its fault; run `drillbook abort` |
 | `aborted` | Preflight failed, Prometheus could not be reached, or the drill was interrupted |
+
+## Quick start
+
+You need Docker (no sudo needed), Go 1.27, Terraform, Helm, kubectl and ansible-core. The drill environment uses about 4 GB of memory.
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install ansible-core==2.21.5
+export PATH=$PWD/.venv/bin:$PATH
+
+env/up.sh                          # Terraform + Ansible: two-node kubeadm cluster with kube-prometheus-stack
+make build                         # bin/drillbook
+bin/drillbook lint                 # check drills and runbooks without touching anything
+bin/drillbook plan kubelet-stopped # show what a drill would do
+bin/drillbook run shop-api-scaled-to-zero
+env/down.sh                        # remove the environment
+```
