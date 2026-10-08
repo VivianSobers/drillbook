@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/util/retry"
 
 	"github.com/VivianSobers/drillbook/internal/drill"
 )
@@ -70,8 +71,15 @@ func (f *Faults) Apply(ctx context.Context, k drill.KubeFault, drillID string) e
 	switch {
 	case k.Scale != nil:
 		n := *k.Scale
-		d.Spec.Replicas = &n
-		_, err = deps.Update(ctx, d, metav1.UpdateOptions{})
+		err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			cur, err := deps.Get(ctx, k.Deployment, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
+			cur.Spec.Replicas = &n
+			_, err = deps.Update(ctx, cur, metav1.UpdateOptions{})
+			return err
+		})
 	case k.Patch != nil:
 		pt, ok := patchTypes[k.Patch.Type]
 		if !ok {
@@ -124,16 +132,21 @@ func (f *Faults) Revert(ctx context.Context, _ drill.KubeFault, drillID string) 
 		return fmt.Errorf("snapshot %s: %w", p, err)
 	}
 	deps := f.Client.AppsV1().Deployments(s.Namespace)
-	d, err := deps.Get(ctx, s.Deployment, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("get deployment %s/%s: %w", s.Namespace, s.Deployment, err)
-	}
-	if !equality.Semantic.DeepEqual(d.Spec.Replicas, s.Replicas) || !equality.Semantic.DeepEqual(d.Spec.Template, s.Template) {
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		d, err := deps.Get(ctx, s.Deployment, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		if equality.Semantic.DeepEqual(d.Spec.Replicas, s.Replicas) && equality.Semantic.DeepEqual(d.Spec.Template, s.Template) {
+			return nil
+		}
 		d.Spec.Replicas = s.Replicas
 		d.Spec.Template = s.Template
-		if _, err := deps.Update(ctx, d, metav1.UpdateOptions{}); err != nil {
-			return fmt.Errorf("restore %s/%s: %w", s.Namespace, s.Deployment, err)
-		}
+		_, err = deps.Update(ctx, d, metav1.UpdateOptions{})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("restore %s/%s: %w", s.Namespace, s.Deployment, err)
 	}
 	return os.Remove(p)
 }

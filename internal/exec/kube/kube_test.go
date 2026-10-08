@@ -2,14 +2,19 @@ package kube
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/VivianSobers/drillbook/internal/drill"
 )
@@ -162,5 +167,28 @@ func TestApplyMissingDeploymentFails(t *testing.T) {
 	k.Deployment = "nope"
 	if err := f.Apply(context.Background(), k, "d6"); err == nil {
 		t.Fatal("want error")
+	}
+}
+
+func TestApplyAndRevertRetryOnConflict(t *testing.T) {
+	f, cs, _ := setup(t)
+	conflicts := 0
+	cs.PrependReactor("update", "deployments", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if conflicts < 2 {
+			conflicts++
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Group: "apps", Resource: "deployments"}, "shop-api", errors.New("the object has been modified"))
+		}
+		return false, nil, nil
+	})
+	ctx := context.Background()
+	if err := f.Apply(ctx, scale(0), "c1"); err != nil {
+		t.Fatalf("apply must retry a conflict: %v", err)
+	}
+	conflicts = 0
+	if err := f.Revert(ctx, scale(0), "c1"); err != nil {
+		t.Fatalf("revert must retry a conflict: %v", err)
+	}
+	if r := *get(t, cs).Spec.Replicas; r != 2 {
+		t.Fatalf("replicas = %d", r)
 	}
 }
