@@ -1,0 +1,23 @@
+# A release adds a flag the binary does not know, so new pods crash on start.
+# KubePodCrashLooping should fire for the shop team; rolling back fixes it.
+alert: KubePodCrashLooping
+runbook: ../runbooks/kubernetes/KubePodCrashLooping.md
+target:
+  labels: {namespace: shop, container: api}
+  env: {NAMESPACE: shop, DEPLOYMENT: shop-api}
+fault:
+  kube:
+    namespace: shop
+    deployment: shop-api
+    patch:
+      type: json
+      body:
+        - op: add
+          path: /spec/template/spec/containers/0/args/-
+          value: --cache-size=512
+fire_within: 25m
+resolve_within: 10m
+expected_resolve: 8m
+expect:
+  receiver: shop-team
+schedule: weekly
