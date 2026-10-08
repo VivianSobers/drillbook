@@ -77,6 +77,8 @@ jobs:
           issues=""
           if [ "${{ github.event_name }}" = "schedule" ]; then issues="--github-issues ${{ github.repository }}"; fi
           bin/drillbook run $issues ${{ steps.pick.outputs.drills }}
+      - name: Test the Helm chart in the cluster
+        run: tests/chart/run.sh
       - name: Summarise results
         if: always()
         run: |
