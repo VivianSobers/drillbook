@@ -1,0 +1,10 @@
+---
+- name: Disarm the revert timer
+  ansible.builtin.include_role:
+    name: drillbook.faults.revert_timer
+    tasks_from: disarm
+
+- name: Start the service
+  ansible.builtin.systemd_service:
+    name: "{{ stop_service_name }}"
+    state: started

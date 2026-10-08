@@ -1,0 +1,53 @@
+---
+- name: Stop_container stops a Docker container and reverts
+  hosts: local
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-ctr-1
+    drillbook_revert_after: 600
+    stop_container_name: drillbook-roletest-app
+  tasks:
+    - name: Apply
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_container
+        tasks_from: apply
+    - name: Read container state
+      ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' drillbook-roletest-app
+      register: running
+      changed_when: false
+    - name: Container is stopped
+      ansible.builtin.assert:
+        that: running.stdout == 'false'
+    - name: Revert
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_container
+        tasks_from: revert
+    - name: Read container state after revert
+      ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' drillbook-roletest-app
+      register: running2
+      changed_when: false
+    - name: Container is running again
+      ansible.builtin.assert:
+        that: running2.stdout == 'true'
+
+- name: Stop_container is undone by the timer
+  hosts: local
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-ctr-2
+    # Longer than `docker stop` takes (alpine sleep ignores SIGTERM, so 10s),
+    # or the timer fires before the stop finishes and its start is a no-op.
+    drillbook_revert_after: 20
+    stop_container_name: drillbook-roletest-app
+  tasks:
+    - name: Apply and walk away
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_container
+        tasks_from: apply
+    - name: Wait for the timer to start it
+      ansible.builtin.command: docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' drillbook-roletest-app
+      register: running
+      changed_when: false
+      until: running.stdout == 'true'
+      retries: 30
+      delay: 1

@@ -1,0 +1,22 @@
+---
+- name: Check the container name
+  ansible.builtin.assert:
+    that: stop_container_name | length > 0
+    fail_msg: stop_container_name is required
+
+- name: Check the container exists
+  ansible.builtin.command:
+    argv: [docker, inspect, --type, container, "{{ stop_container_name }}"]
+  changed_when: false
+
+- name: Arm the revert timer
+  ansible.builtin.include_role:
+    name: drillbook.faults.revert_timer
+    tasks_from: arm
+  vars:
+    revert_timer_command: "docker start {{ stop_container_name | quote }}"
+
+- name: Stop the container
+  ansible.builtin.command:
+    argv: [docker, stop, "{{ stop_container_name }}"]
+  changed_when: true

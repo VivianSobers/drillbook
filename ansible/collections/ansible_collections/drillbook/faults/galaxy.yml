@@ -1,0 +1,17 @@
+namespace: drillbook
+name: faults
+version: 0.1.0
+readme: README.md
+authors:
+  - Vivian Sobers
+description: Faults for drillbook fire drills. Every fault arms a host-side revert timer before it changes anything.
+license:
+  - Apache-2.0
+tags:
+  - infrastructure
+  - tools
+  - chaos
+  - sre
+  - drills
+repository: https://github.com/VivianSobers/drillbook
+build_ignore: []

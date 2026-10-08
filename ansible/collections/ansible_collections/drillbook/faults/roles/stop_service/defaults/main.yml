@@ -1,0 +1,8 @@
+---
+stop_service_name: ""
+# Units the revert path needs. Stopping them would strand the host.
+stop_service_refuse:
+  - ssh
+  - sshd
+  - ssh.service
+  - sshd.service

@@ -1,0 +1,19 @@
+---
+- name: Check the service name
+  ansible.builtin.assert:
+    that:
+      - stop_service_name | length > 0
+      - stop_service_name not in stop_service_refuse
+    fail_msg: "stop_service refuses '{{ stop_service_name }}' (empty, or needed to reach the host)"
+
+- name: Arm the revert timer
+  ansible.builtin.include_role:
+    name: drillbook.faults.revert_timer
+    tasks_from: arm
+  vars:
+    revert_timer_command: "systemctl start {{ stop_service_name | quote }}"
+
+- name: Stop the service
+  ansible.builtin.systemd_service:
+    name: "{{ stop_service_name }}"
+    state: stopped

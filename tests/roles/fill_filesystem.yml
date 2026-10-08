@@ -1,0 +1,87 @@
+---
+- name: Fill_filesystem fills to the target and reverts
+  hosts: roletest
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-fill-1
+    drillbook_revert_after: 600
+    fill_filesystem_path: /var/lib/app-data
+    fill_filesystem_file: logs/app.log.1
+    fill_filesystem_leave_free_percent: 4
+  tasks:
+    - name: Apply
+      ansible.builtin.include_role:
+        name: drillbook.faults.fill_filesystem
+        tasks_from: apply
+    - name: Read free space
+      ansible.builtin.shell: set -o pipefail; df --output=pcent /var/lib/app-data | tail -1 | tr -dc 0-9
+      args:
+        executable: /bin/bash
+      register: used
+      changed_when: false
+    - name: About 96 percent used, file in place
+      ansible.builtin.assert:
+        that:
+          - used.stdout | int >= 95
+          - used.stdout | int <= 97
+    - name: Fill file exists
+      ansible.builtin.stat:
+        path: /var/lib/app-data/logs/app.log.1
+      register: f
+    - name: File present
+      ansible.builtin.assert:
+        that: f.stat.exists
+    - name: Revert
+      ansible.builtin.include_role:
+        name: drillbook.faults.fill_filesystem
+        tasks_from: revert
+    - name: Fill file gone
+      ansible.builtin.stat:
+        path: /var/lib/app-data/logs/app.log.1
+      register: f2
+    - name: File removed
+      ansible.builtin.assert:
+        that: not f2.stat.exists
+
+- name: Fill_filesystem is undone by the host timer
+  hosts: roletest
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-fill-2
+    drillbook_revert_after: 3
+    fill_filesystem_path: /var/lib/app-data
+    fill_filesystem_file: logs/app.log.1
+  tasks:
+    - name: Apply and walk away
+      ansible.builtin.include_role:
+        name: drillbook.faults.fill_filesystem
+        tasks_from: apply
+    - name: Wait for the timer to delete the file
+      ansible.builtin.stat:
+        path: /var/lib/app-data/logs/app.log.1
+      register: f
+      until: not f.stat.exists
+      retries: 20
+      delay: 1
+
+- name: Fill_filesystem refuses large filesystems
+  hosts: roletest
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-fill-3
+    drillbook_revert_after: 600
+    fill_filesystem_path: /etc
+  tasks:
+    - name: Try to fill the root filesystem
+      block:
+        - name: Apply
+          ansible.builtin.include_role:
+            name: drillbook.faults.fill_filesystem
+            tasks_from: apply
+        - name: Must not get here
+          ansible.builtin.fail:
+            msg: fill_filesystem filled a large filesystem
+      rescue:
+        - name: Refused as expected
+          ansible.builtin.assert:
+            that: "'max_fs_bytes' in ansible_failed_result.msg | default('')"

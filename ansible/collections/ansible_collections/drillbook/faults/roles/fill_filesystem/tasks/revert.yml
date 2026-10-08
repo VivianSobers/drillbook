@@ -1,0 +1,10 @@
+---
+- name: Disarm the revert timer
+  ansible.builtin.include_role:
+    name: drillbook.faults.revert_timer
+    tasks_from: disarm
+
+- name: Remove the fill file
+  ansible.builtin.file:
+    path: "{{ fill_filesystem_path }}/{{ fill_filesystem_file }}"
+    state: absent

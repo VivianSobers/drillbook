@@ -1,0 +1,10 @@
+---
+- name: Find the remote user id
+  ansible.builtin.command: id -u
+  register: revert_timer_uid
+  changed_when: false
+
+- name: Choose the systemd manager
+  ansible.builtin.set_fact:
+    revert_timer_scope: "{{ [] if revert_timer_uid.stdout == '0' else ['--user'] }}"
+    revert_timer_unit: "drillbook-revert-{{ drillbook_drill_id }}"

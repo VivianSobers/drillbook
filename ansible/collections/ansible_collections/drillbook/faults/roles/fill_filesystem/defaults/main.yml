@@ -1,0 +1,7 @@
+---
+fill_filesystem_path: ""
+# Relative to fill_filesystem_path. Name it like the files the runbook cleans up.
+fill_filesystem_file: "drillbook-fill-{{ drillbook_drill_id }}"
+fill_filesystem_leave_free_percent: 4
+# Refuse to fill anything bigger than this; drills belong on small, dedicated filesystems.
+fill_filesystem_max_fs_bytes: 2147483648

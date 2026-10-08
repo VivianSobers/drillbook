@@ -1,0 +1,10 @@
+---
+- name: Pick the scope
+  ansible.builtin.include_tasks: scope.yml
+
+- name: Stop the revert timer
+  ansible.builtin.command:
+    argv: "{{ ['systemctl'] + revert_timer_scope + ['stop', revert_timer_unit + '.timer'] }}"
+  register: revert_timer_stop
+  changed_when: revert_timer_stop.rc == 0
+  failed_when: false

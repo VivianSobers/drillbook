@@ -1,0 +1,98 @@
+---
+- name: Stop_service applies, arms a timer and reverts
+  hosts: roletest
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-stop-1
+    drillbook_revert_after: 600
+    stop_service_name: drillbook-dummy
+  tasks:
+    - name: Apply
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_service
+        tasks_from: apply
+    - name: Read service state
+      ansible.builtin.command: systemctl is-active drillbook-dummy  # noqa: command-instead-of-module
+      register: svc
+      changed_when: false
+      failed_when: false
+    - name: Read timer state
+      ansible.builtin.command: systemctl is-active drillbook-revert-t-stop-1.timer  # noqa: command-instead-of-module
+      register: timer
+      changed_when: false
+      failed_when: false
+    - name: Service is stopped and the revert timer is armed
+      ansible.builtin.assert:
+        that:
+          - svc.stdout == 'inactive'
+          - timer.stdout == 'active'
+    - name: Revert
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_service
+        tasks_from: revert
+    - name: Read service state after revert
+      ansible.builtin.command: systemctl is-active drillbook-dummy  # noqa: command-instead-of-module
+      register: svc2
+      changed_when: false
+      failed_when: false
+    - name: Read timer state after revert
+      ansible.builtin.command: systemctl is-active drillbook-revert-t-stop-1.timer  # noqa: command-instead-of-module
+      register: timer2
+      changed_when: false
+      failed_when: false
+    - name: Service is back and the timer is gone
+      ansible.builtin.assert:
+        that:
+          - svc2.stdout == 'active'
+          - timer2.stdout != 'active'
+    - name: Revert twice is harmless
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_service
+        tasks_from: revert
+
+- name: Stop_service is undone by the host timer when nobody reverts
+  hosts: roletest
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-stop-2
+    drillbook_revert_after: 3
+    stop_service_name: drillbook-dummy
+  tasks:
+    - name: Apply and walk away
+      ansible.builtin.include_role:
+        name: drillbook.faults.stop_service
+        tasks_from: apply
+    - name: Wait for the timer to start the service again
+      ansible.builtin.command: systemctl is-active drillbook-dummy  # noqa: command-instead-of-module
+      register: svc
+      changed_when: false
+      failed_when: false
+      until: svc.stdout == 'active'
+      retries: 20
+      delay: 1
+
+- name: Stop_service refuses to stop sshd
+  hosts: roletest
+  gather_facts: false
+  vars:
+    drillbook_drill_id: t-stop-3
+    drillbook_revert_after: 600
+    stop_service_name: ssh
+  tasks:
+    - name: Try to stop ssh
+      block:
+        - name: Apply
+          ansible.builtin.include_role:
+            name: drillbook.faults.stop_service
+            tasks_from: apply
+        - name: Must not get here
+          ansible.builtin.fail:
+            msg: stop_service stopped ssh
+      rescue:
+        - name: Read ssh state
+          ansible.builtin.command: systemctl is-active ssh  # noqa: command-instead-of-module
+          register: ssh_state
+          changed_when: false
+        - name: Ssh still running
+          ansible.builtin.assert:
+            that: ssh_state.stdout == 'active'

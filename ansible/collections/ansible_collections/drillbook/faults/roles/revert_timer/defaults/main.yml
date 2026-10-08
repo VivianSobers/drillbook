@@ -1,0 +1,3 @@
+---
+# The command the timer runs to undo the fault. Set by the calling role.
+revert_timer_command: ""

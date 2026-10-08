@@ -1,0 +1,10 @@
+---
+- name: Disarm the revert timer
+  ansible.builtin.include_role:
+    name: drillbook.faults.revert_timer
+    tasks_from: disarm
+
+- name: Start the container
+  ansible.builtin.command:
+    argv: [docker, start, "{{ stop_container_name }}"]
+  changed_when: true

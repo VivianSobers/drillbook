@@ -1,0 +1,33 @@
+---
+- name: Check the inputs
+  ansible.builtin.assert:
+    that:
+      - drillbook_drill_id is defined and drillbook_drill_id | length > 0
+      - drillbook_revert_after is defined and drillbook_revert_after | int > 0
+      - revert_timer_command | length > 0
+    fail_msg: revert_timer needs drillbook_drill_id, drillbook_revert_after and revert_timer_command
+
+- name: Pick the scope
+  ansible.builtin.include_tasks: scope.yml
+
+- name: Clear a leftover unit with the same name
+  ansible.builtin.command:
+    argv: "{{ ['systemctl'] + revert_timer_scope + ['stop', revert_timer_unit + '.timer', revert_timer_unit + '.service'] }}"
+  changed_when: false
+  failed_when: false
+
+- name: Reset a failed leftover unit
+  ansible.builtin.command:
+    argv: "{{ ['systemctl'] + revert_timer_scope + ['reset-failed', revert_timer_unit + '.service'] }}"
+  changed_when: false
+  failed_when: false
+
+- name: Arm the revert timer
+  ansible.builtin.command:
+    argv: "{{ ['systemd-run'] + revert_timer_scope + revert_timer_args + ['/bin/sh', '-c', revert_timer_command] }}"
+  vars:
+    revert_timer_args:
+      - "--on-active={{ drillbook_revert_after | int }}s"
+      - "--unit={{ revert_timer_unit }}"
+      - "--description=drillbook revert for {{ drillbook_drill_id }}"
+  changed_when: true
