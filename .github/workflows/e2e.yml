@@ -77,6 +77,12 @@ jobs:
           issues=""
           if [ "${{ github.event_name }}" = "schedule" ]; then issues="--github-issues ${{ github.repository }}"; fi
           bin/drillbook run $issues ${{ steps.pick.outputs.drills }}
+      - name: Summarise results
+        if: always()
+        run: |
+          if [ -f .drillbook/results.jsonl ]; then
+            { echo "## Drill results"; echo; bin/drillbook report; } >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Revert anything left behind
         if: always()
         run: bin/drillbook abort || true
