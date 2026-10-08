@@ -1,0 +1,37 @@
+{{- if .Values.rbac.create }}
+{{- range .Values.config.allow.namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "drillbook.name" $ }}
+  namespace: {{ . }}
+  labels:
+    {{- include "drillbook.labels" $ | nindent 4 }}
+rules:
+  # Faults change Deployments; rollbacks in runbooks read ReplicaSets.
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale", "replicasets"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+  # Diagnostic blocks read pods, logs and events.
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "drillbook.name" $ }}
+  namespace: {{ . }}
+  labels:
+    {{- include "drillbook.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "drillbook.name" $ }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "drillbook.name" $ }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
