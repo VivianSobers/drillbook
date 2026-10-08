@@ -27,3 +27,12 @@
   environment:
     KUBECONFIG: "{{ drillbook_kubeconfig }}"
   changed_when: false
+
+- name: Wait for Prometheus to scrape the shop service
+  ansible.builtin.uri:
+    url: "http://{{ drillbook_control_plane_ip }}:30090/api/v1/query?query={{ 'count(up{job=\"shop-api\"} == 1)' | urlencode }}"
+    return_content: true
+  register: shop_demo_scraped
+  until: (shop_demo_scraped.json.data.result | length) > 0
+  retries: 60
+  delay: 5
