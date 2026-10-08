@@ -181,3 +181,21 @@ The nodes share the host's kernel and clock, so clock faults cannot run in this 
 
 - [ci.yml](.github/workflows/ci.yml) runs the Go tests and linters, ansible-lint, the fault role tests against a throwaway node container, `terraform validate`, the `promtool` rule tests, `pint` and `drillbook lint`.
 - [e2e.yml](.github/workflows/e2e.yml) builds the drill environment on the GitHub runner, checks the rules against its Prometheus with `pint`, and runs real drills: those affected by a pull request that fire within 20 minutes, or a chosen set on demand and every week.
+
+## Layout
+
+```
+cmd/drillbook/           CLI entry point
+internal/                engine, verdicts, runbook parser, executors, Prometheus and Alertmanager clients
+ansible/collections/     the drillbook.faults collection
+drills/                  drill files
+runbooks/                runbooks for kube-prometheus-stack alerts
+examples/shop/           demo service, its alert rules, promtool tests and runbook
+env/                     Terraform and Ansible for the drill environment
+tests/roles/             fault role tests
+docs/                    design spec, implementation plan, drill results
+```
+
+## License
+
+Apache-2.0
