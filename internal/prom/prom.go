@@ -24,16 +24,22 @@ func New(base string) *Client {
 
 // Selector builds ALERTS{alertname=...,alertstate="firing",...} with labels sorted.
 func Selector(alert string, labels map[string]string) string {
+	parts := append([]string{"alertname=" + quote(alert), `alertstate="firing"`}, Matchers(labels)...)
+	return "ALERTS{" + strings.Join(parts, ",") + "}"
+}
+
+// Matchers renders labels as sorted, escaped name="value" equality matchers.
+func Matchers(labels map[string]string) []string {
 	keys := make([]string, 0, len(labels))
 	for k := range labels {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	parts := []string{"alertname=" + quote(alert), `alertstate="firing"`}
+	out := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, k+"="+quote(labels[k]))
+		out = append(out, k+"="+quote(labels[k]))
 	}
-	return "ALERTS{" + strings.Join(parts, ",") + "}"
+	return out
 }
 
 func quote(v string) string {
