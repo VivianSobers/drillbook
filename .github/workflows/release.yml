@@ -1,0 +1,44 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: go test ./...
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*}; arch=${target#*/}
+            out="dist/drillbook_${GITHUB_REF_NAME}_${os}_${arch}"
+            CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X github.com/VivianSobers/drillbook/internal/cli.Version=${GITHUB_REF_NAME}" \
+              -o "$out/drillbook" ./cmd/drillbook
+            cp LICENSE README.md "$out/"
+            tar -C dist -czf "$out.tar.gz" "$(basename "$out")"
+            rm -rf "$out"
+          done
+      - name: Build the Ansible collection
+        run: |
+          pip install ansible-core==2.21.5
+          ansible-galaxy collection build ansible/collections/ansible_collections/drillbook/faults --output-path dist
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
