@@ -31,3 +31,26 @@ $ drillbook run shop-api-scaled-to-zero
 Alerts and runbooks fail quietly. A rule can reference a metric that an exporter renamed, so it never fires. An alert can fire and route to nobody. A runbook can name a flag or a namespace that no longer exists, and nobody notices until someone follows it during an incident.
 
 Existing tools check parts of this. `promtool test rules` checks rule logic against made-up series, `pint` checks rules against a live Prometheus, and chaos tools such as LitmusChaos and Krkn inject faults and can query Prometheus while they do. None of them run the runbook and check that it clears the alert. drillbook does that, and uses promtool and pint for the parts they already cover.
+
+## How a drill works
+
+1. Preflight: the drill, runbook and target are valid, and the alert is not already firing.
+2. Silence the alert for this target only, so nobody is paged.
+3. For a host fault, arm a revert timer on the host. Then inject the fault.
+4. Wait for the alert to fire, then read which Alertmanager receiver it reached.
+5. Run the runbook's `check` blocks, then its `fix` blocks.
+6. Wait for the alert to clear and record how long it took.
+7. Revert the fault and delete the silence. This happens on every path, including Ctrl-C.
+8. After a pass, run the control: inject the fault again without the runbook. If the alert clears anyway, the verdict is `inconclusive`. The control result is cached until the drill file changes.
+
+| Verdict | Meaning |
+|---|---|
+| `pass` | The alert fired, reached the expected receiver, the runbook cleared it in time, and the control held |
+| `alert-did-not-fire` | The fault was applied but the alert never fired |
+| `misrouted` | The alert fired but reached a different receiver |
+| `step-failed` | A runbook block exited non-zero |
+| `not-resolved` | The runbook ran but the alert was still firing at the deadline |
+| `slower-than-runbook` | The alert cleared, but slower than the runbook promises |
+| `inconclusive` | The alert also cleared without the runbook |
+| `revert-failed` | drillbook could not undo its fault; run `drillbook abort` |
+| `aborted` | Preflight failed, Prometheus could not be reached, or the drill was interrupted |
