@@ -26,6 +26,8 @@ $ drillbook run shop-api-scaled-to-zero
 [13:58:56] shop-api-scaled-to-zero: verdict: pass
 ```
 
+All five drills in this repository pass against that environment, with their control runs holding. [docs/v0.1-drill-results.md](docs/v0.1-drill-results.md) has the numbers, and the failures found on the way.
+
 ## Why
 
 Alerts and runbooks fail quietly. A rule can reference a metric that an exporter renamed, so it never fires. An alert can fire and route to nobody. A runbook can name a flag or a namespace that no longer exists, and nobody notices until someone follows it during an incident.
@@ -215,7 +217,7 @@ The nodes share the host's kernel and clock, so clock faults cannot run in this 
 ## CI
 
 - [ci.yml](.github/workflows/ci.yml) runs the Go tests and linters, ansible-lint, the fault role tests against a throwaway node container, `terraform validate`, the `promtool` rule tests, `pint` and `drillbook lint`.
-- [e2e.yml](.github/workflows/e2e.yml) builds the drill environment on the GitHub runner, checks the rules against its Prometheus with `pint`, and runs real drills: those affected by a pull request that fire within 20 minutes, or a chosen set on demand and every week.
+- [e2e.yml](.github/workflows/e2e.yml) builds the drill environment on the GitHub runner, checks the rules against its Prometheus with `pint`, and runs real drills: those affected by a pull request that fire within 20 minutes, or a chosen set on demand and every week. It then installs the Helm chart and runs a drill from it.
 
 ## Layout
 
