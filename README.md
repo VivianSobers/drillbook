@@ -161,6 +161,23 @@ Host faults are in the `drillbook.faults` Ansible collection under [ansible/coll
 
 Results go to `.drillbook/results.jsonl`, and each drill keeps a full log under `.drillbook/logs/`.
 
+## Metrics and alerts on drills
+
+A drill that quietly stops running looks exactly like one that keeps passing, so drillbook exports its results as metrics:
+
+```sh
+drillbook report --format prometheus --output /var/lib/node_exporter/textfile/drillbook.prom
+```
+
+| Metric | Meaning |
+|---|---|
+| `drillbook_drill_last_run_timestamp_seconds` | When the latest run of each drill started |
+| `drillbook_drill_last_success_timestamp_seconds` | When its latest passing run started |
+| `drillbook_drill_passed` | 1 if the latest run passed |
+| `drillbook_drill_resolve_seconds` | Time to resolve in the latest passing run |
+
+[deploy/prometheus/drillbook-alerts.yaml](deploy/prometheus/drillbook-alerts.yaml) alerts when a drill is failing, when one has not passed in eight days, and when the metrics are missing altogether. The alerts have promtool tests and their own runbooks under [runbooks/drillbook](runbooks/drillbook).
+
 ## Safety
 
 - Hosts and namespaces must be listed under `allow` in `drillbook.yaml`. Runbook blocks that target `host:<name>` are checked against the same list.
