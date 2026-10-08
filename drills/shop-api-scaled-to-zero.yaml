@@ -1,0 +1,18 @@
+# Someone scales the shop API to zero. ShopApiDown should fire within a
+# couple of minutes and route to the shop team; scaling back up fixes it.
+alert: ShopApiDown
+runbook: ../examples/shop/runbooks/ShopApiDown.md
+target:
+  labels: {service: shop-api}
+fault:
+  kube:
+    namespace: shop
+    deployment: shop-api
+    scale: 0
+fixes: [scale-up]
+fire_within: 4m
+resolve_within: 4m
+expected_resolve: 2m
+expect:
+  receiver: shop-team
+schedule: daily
