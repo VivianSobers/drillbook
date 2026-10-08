@@ -126,3 +126,10 @@ func TestRulesGlobMatchingNothingIsAnError(t *testing.T) {
 		t.Fatal("a rules glob that matches nothing is almost always a typo")
 	}
 }
+
+func TestUnknownFixNameReported(t *testing.T) {
+	dir := repo(t, map[string]string{"drills/a.yaml": goodDrill + "fixes: [scale-up]\n", "runbooks/ShopApiDown.md": goodRunbook})
+	if got := joined(Drills(cfg(), load(t, dir))); !strings.Contains(got, `no fix block named "scale-up"`) {
+		t.Fatalf("got %q", got)
+	}
+}

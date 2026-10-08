@@ -67,7 +67,9 @@ type Drill struct {
 	ResolveWithin   config.Duration `json:"resolve_within"`
 	ExpectedResolve config.Duration `json:"expected_resolve"`
 	Expect          Expect          `json:"expect"`
-	Schedule        string          `json:"schedule,omitempty"`
+	// Fixes names the runbook's fix blocks to run; empty runs all of them.
+	Fixes    []string `json:"fixes,omitempty"`
+	Schedule string   `json:"schedule,omitempty"`
 
 	// File is the drill file's absolute path; Hash is a digest of its bytes.
 	File string `json:"-"`

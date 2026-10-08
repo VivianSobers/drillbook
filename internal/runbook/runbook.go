@@ -51,6 +51,33 @@ type Runbook struct {
 func (r *Runbook) Checks() []Block { return r.filter(Check) }
 func (r *Runbook) Fixes() []Block  { return r.filter(Fix) }
 
+// SelectFixes returns the fix blocks with the given names, in document order.
+// No names selects every fix block. A runbook that covers several causes uses
+// this so each drill runs only the fix for the cause it injects.
+func (r *Runbook) SelectFixes(names []string) ([]Block, error) {
+	fixes := r.Fixes()
+	if len(names) == 0 {
+		return fixes, nil
+	}
+	want := map[string]bool{}
+	for _, n := range names {
+		want[n] = true
+	}
+	var out []Block
+	for _, b := range fixes {
+		if want[b.Name] {
+			out = append(out, b)
+			delete(want, b.Name)
+		}
+	}
+	for _, n := range names {
+		if want[n] {
+			return nil, fmt.Errorf("%s: no fix block named %q", r.Path, n)
+		}
+	}
+	return out, nil
+}
+
 func (r *Runbook) filter(k Kind) []Block {
 	var out []Block
 	for _, b := range r.Blocks {

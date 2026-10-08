@@ -122,6 +122,10 @@ func (a *app) runCmd() *cobra.Command {
 					problems = append(problems, err.Error())
 					continue
 				}
+				if _, err := rb.SelectFixes(d.Fixes); err != nil {
+					problems = append(problems, err.Error())
+					continue
+				}
 				batch = append(batch, prepared{d, rb})
 			}
 			if len(problems) > 0 {
@@ -250,7 +254,12 @@ func (a *app) planCmd() *cobra.Command {
 				fmt.Fprintf(w, "  INVALID  %v\n", err)
 				return err
 			}
-			for _, b := range append(rb.Checks(), rb.Fixes()...) {
+			fixes, err := rb.SelectFixes(d.Fixes)
+			if err != nil {
+				fmt.Fprintf(w, "  INVALID  %v\n", err)
+				return err
+			}
+			for _, b := range append(rb.Checks(), fixes...) {
 				fmt.Fprintf(w, "    %-6s %-24s %-14s line %d\n", b.Kind, b.Name, b.Target, b.Line)
 			}
 			cached := "no"

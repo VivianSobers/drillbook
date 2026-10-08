@@ -40,7 +40,11 @@ func Drills(cfg *config.Config, ds []*drill.Drill) []Problem {
 			ps = append(ps, Problem{d.Runbook, err.Error()})
 			continue
 		}
-		if len(rb.Fixes()) == 0 {
+		fixes, err := rb.SelectFixes(d.Fixes)
+		switch {
+		case err != nil:
+			ps = append(ps, Problem{d.File, err.Error()})
+		case len(fixes) == 0:
 			ps = append(ps, Problem{d.Runbook, "runbook has no fix blocks, so drill " + d.Name + " has nothing to run"})
 		}
 	}

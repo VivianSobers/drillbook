@@ -409,3 +409,26 @@ func TestRunRevertFailureIsReportedAndKeepsActiveRecord(t *testing.T) {
 		t.Errorf("silence should still be deleted, got %v", w.silences)
 	}
 }
+
+func TestRunOnlySelectedFixes(t *testing.T) {
+	w, e, _ := setup(t)
+	d := testDrill(t)
+	d.Fixes = []string{"verify"}
+	r := e.Run(context.Background(), d, testRunbook(), RunOptions{SkipControl: true})
+	if r.Verdict != Pass {
+		t.Fatalf("verdict %s %v", r.Verdict, r.Findings)
+	}
+	if strings.Join(w.blocksRun, ",") != "status,verify" {
+		t.Errorf("blocks run = %v", w.blocksRun)
+	}
+}
+
+func TestRunUnknownFixAbortsBeforeFault(t *testing.T) {
+	w, e, _ := setup(t)
+	d := testDrill(t)
+	d.Fixes = []string{"reboot"}
+	r := e.Run(context.Background(), d, testRunbook(), RunOptions{})
+	if r.Verdict != Aborted || w.applies != 0 {
+		t.Fatalf("verdict %s applies %d", r.Verdict, w.applies)
+	}
+}

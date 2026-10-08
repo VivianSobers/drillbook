@@ -120,7 +120,11 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 	}
 
 	// Preflight: nothing is changed until these pass.
-	if len(rb.Fixes()) == 0 {
+	fixes, err := rb.SelectFixes(d.Fixes)
+	if err != nil {
+		return abort(err.Error())
+	}
+	if len(fixes) == 0 {
 		return abort("runbook " + rb.Path + " has no fix blocks")
 	}
 	firing, err := e.Prom.Firing(ctx, d.Alert, d.Target.Labels)
@@ -142,7 +146,7 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 		return abort("state: " + err.Error())
 	}
 
-	obs = e.drive(ctx, d, rb, opts, id, obs, &res, logw, say)
+	obs = e.drive(ctx, d, append(rb.Checks(), fixes...), opts, id, obs, &res, logw, say)
 
 	e.deleteSilence(silence, say)
 	if obs.RevertFailed == "" {
@@ -159,7 +163,7 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 
 // drive applies the fault and observes the drill. It always reverts the fault
 // before returning and reports a failed revert in the observations.
-func (e *Engine) drive(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, opts RunOptions, id string, obs Observations, res *Result, logw io.Writer, say func(string, ...any)) (out Observations) {
+func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Block, opts RunOptions, id string, obs Observations, res *Result, logw io.Writer, say func(string, ...any)) (out Observations) {
 	cleanCtx := context.WithoutCancel(ctx)
 	reverted := false
 	revert := func() {
@@ -207,7 +211,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, rb *runbook.Runbook,
 	say("alertmanager receivers: %v", obs.Receivers)
 
 	runbookAt := e.Clock.Now()
-	for _, b := range append(rb.Checks(), rb.Fixes()...) {
+	for _, b := range steps {
 		say("running %s block %s (target %s)", b.Kind, b.Name, b.Target)
 		if err := e.Blocks.RunBlock(ctx, b, d, logw); err != nil {
 			if ctx.Err() != nil {

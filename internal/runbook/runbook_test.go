@@ -125,3 +125,28 @@ func TestParseIgnoresIndentedAndTildeFencesConsistently(t *testing.T) {
 		t.Fatalf("tilde fence not parsed: %+v", rb.Blocks)
 	}
 }
+
+func TestSelectFixes(t *testing.T) {
+	rb, err := Parse(write(t, sample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	all, err := rb.SelectFixes(nil)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("no names selects every fix block: %v %v", all, err)
+	}
+	// Order follows the document, not the list.
+	got, err := rb.SelectFixes([]string{"other-host", "restart"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Name != "restart" || got[1].Name != "other-host" {
+		t.Fatalf("got %+v", got)
+	}
+	if _, err := rb.SelectFixes([]string{"restart", "reboot"}); err == nil || !strings.Contains(err.Error(), `no fix block named "reboot"`) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := rb.SelectFixes([]string{"node-status"}); err == nil {
+		t.Fatal("a check block is not a fix")
+	}
+}

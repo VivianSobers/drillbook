@@ -177,3 +177,13 @@ func TestLoadDirSortsAndSkipsNonYAML(t *testing.T) {
 		t.Fatalf("got %d drills: %v", len(ds), ds)
 	}
 }
+
+func TestLoadFixesList(t *testing.T) {
+	d, err := Load(fixture(t, "x.yaml", validKube+"fixes: [scale-up]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Fixes) != 1 || d.Fixes[0] != "scale-up" {
+		t.Fatalf("fixes = %v", d.Fixes)
+	}
+}
