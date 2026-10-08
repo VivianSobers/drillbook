@@ -106,10 +106,6 @@ type lazyKube struct {
 
 func (l *lazyKube) get() (*kube.Faults, error) {
 	l.once.Do(func() {
-		if l.kubeconfig == "" {
-			l.err = errors.New("kube fault needs kubeconfig in drillbook.yaml")
-			return
-		}
 		l.f, l.err = kube.New(l.kubeconfig, l.snapDir)
 	})
 	return l.f, l.err

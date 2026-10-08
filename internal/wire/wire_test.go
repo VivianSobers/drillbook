@@ -120,3 +120,12 @@ func TestHostBlockOutsideAllowlistFails(t *testing.T) {
 		t.Fatalf("nothing may run, got %v", r.calls)
 	}
 }
+
+func TestKubeFaultsWithoutKubeconfigOutsideAClusterExplainsWhy(t *testing.T) {
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	l := &lazyKube{}
+	err := l.Apply(context.Background(), drill.KubeFault{}, "id")
+	if err == nil || !strings.Contains(err.Error(), "no kubeconfig") || !strings.Contains(err.Error(), "in-cluster") {
+		t.Fatalf("err = %v", err)
+	}
+}

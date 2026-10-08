@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/retry"
 
@@ -29,9 +30,19 @@ type Faults struct {
 	SnapshotDir string
 }
 
-// New builds Faults from a kubeconfig file.
+// New builds Faults from a kubeconfig file, or from the pod's service account
+// when kubeconfig is empty and drillbook runs inside a cluster.
 func New(kubeconfig, snapshotDir string) (*Faults, error) {
-	rc, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	var rc *rest.Config
+	var err error
+	if kubeconfig != "" {
+		rc, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	} else {
+		rc, err = rest.InClusterConfig()
+		if err != nil {
+			err = fmt.Errorf("no kubeconfig in drillbook.yaml and no in-cluster service account: %w", err)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
