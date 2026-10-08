@@ -21,6 +21,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: e2e-${{ github.ref }}
@@ -70,7 +71,12 @@ jobs:
           fi
           echo "drills=${drills:-shop-api-scaled-to-zero}" >> "$GITHUB_OUTPUT"
       - name: Run drills
-        run: bin/drillbook run ${{ steps.pick.outputs.drills }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          issues=""
+          if [ "${{ github.event_name }}" = "schedule" ]; then issues="--github-issues ${{ github.repository }}"; fi
+          bin/drillbook run $issues ${{ steps.pick.outputs.drills }}
       - name: Revert anything left behind
         if: always()
         run: bin/drillbook abort || true
