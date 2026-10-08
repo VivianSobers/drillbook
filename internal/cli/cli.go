@@ -22,6 +22,7 @@ import (
 	"github.com/VivianSobers/drillbook/internal/drill"
 	"github.com/VivianSobers/drillbook/internal/engine"
 	"github.com/VivianSobers/drillbook/internal/lint"
+	"github.com/VivianSobers/drillbook/internal/notify"
 	"github.com/VivianSobers/drillbook/internal/prom"
 	"github.com/VivianSobers/drillbook/internal/report"
 	"github.com/VivianSobers/drillbook/internal/runbook"
@@ -86,10 +87,22 @@ func (a *app) find(names []string) ([]*drill.Drill, error) {
 
 func (a *app) runCmd() *cobra.Command {
 	var all, skipControl bool
+	var issuesRepo string
 	c := &cobra.Command{
 		Use:   "run [drill...]",
 		Short: "Run drills against the configured systems",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var gh *notify.GitHub
+			if issuesRepo != "" {
+				if strings.Count(issuesRepo, "/") != 1 {
+					return fmt.Errorf("--github-issues %q must be owner/name", issuesRepo)
+				}
+				token := os.Getenv("GITHUB_TOKEN")
+				if token == "" {
+					return errors.New("--github-issues needs GITHUB_TOKEN in the environment")
+				}
+				gh = &notify.GitHub{Repo: issuesRepo, Token: token, BaseURL: os.Getenv("GITHUB_API_URL")}
+			}
 			if err := a.load(); err != nil {
 				return err
 			}
@@ -140,7 +153,13 @@ func (a *app) runCmd() *cobra.Command {
 				if ctx.Err() != nil {
 					break
 				}
-				results = append(results, eng.Run(ctx, p.d, p.rb, engine.RunOptions{SkipControl: skipControl}))
+				r := eng.Run(ctx, p.d, p.rb, engine.RunOptions{SkipControl: skipControl})
+				results = append(results, r)
+				if gh != nil && r.Verdict != engine.Aborted {
+					if err := gh.Sync(context.WithoutCancel(ctx), r); err != nil {
+						fmt.Fprintf(a.out, "%s: could not update GitHub issue: %v\n", r.Drill, err)
+					}
+				}
 			}
 			a.summary(results)
 			for _, r := range results {
@@ -156,6 +175,7 @@ func (a *app) runCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&all, "all", false, "run every drill in the drill directory")
 	c.Flags().BoolVar(&skipControl, "skip-control", false, "skip the control run after a pass")
+	c.Flags().StringVar(&issuesRepo, "github-issues", "", "owner/name: open an issue when a drill fails, close it when it passes (needs GITHUB_TOKEN)")
 	return c
 }
 

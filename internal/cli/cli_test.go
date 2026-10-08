@@ -232,3 +232,23 @@ func TestReportPrometheusToFile(t *testing.T) {
 		t.Error("unknown format must fail")
 	}
 }
+
+func TestRunGitHubIssuesNeedsToken(t *testing.T) {
+	dir := fixture(t)
+	t.Setenv("GITHUB_TOKEN", "")
+	out, err := run(t, dir, "run", "kubelet-stopped", "--github-issues", "o/r")
+	if err == nil || !strings.Contains(err.Error(), "GITHUB_TOKEN") {
+		t.Fatalf("err = %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".drillbook", "results.jsonl")); !os.IsNotExist(err) {
+		t.Fatal("nothing may run without a token")
+	}
+}
+
+func TestRunGitHubIssuesRepoFormat(t *testing.T) {
+	dir := fixture(t)
+	t.Setenv("GITHUB_TOKEN", "x")
+	if _, err := run(t, dir, "run", "kubelet-stopped", "--github-issues", "just-a-name"); err == nil || !strings.Contains(err.Error(), "owner/name") {
+		t.Fatalf("err = %v", err)
+	}
+}
