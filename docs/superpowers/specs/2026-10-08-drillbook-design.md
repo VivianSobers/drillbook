@@ -48,15 +48,15 @@ The pattern already exists by hand in Private-Cloud, where `scripts/dr-drill.sh`
 
 ## How a drill works
 
-1. **Preflight.** Load the drill file and the runbook. Check that Prometheus and Alertmanager are reachable, the target is on the allowlist, and the alert is not already firing for that target.
-2. **Silence.** Create an Alertmanager silence that matches the alert name and the target's labels, for the length of the drill plus a margin. Prometheus still evaluates the rule, so the `ALERTS` series still shows the alert firing.
-3. **Arm the revert.** For a host fault, schedule the undo on the host before applying the fault, with `systemd-run --on-active=<limit>`. If the runner dies, the host reverts on its own.
-4. **Inject.** Apply the fault through its executor.
-5. **Expect the alert.** Poll Prometheus for `ALERTS{alertname=..., alertstate="firing"}` with the target's labels until it fires or `fire_within` runs out. Then confirm the alert reached Alertmanager and record which receiver it would have notified.
-6. **Run the runbook.** Run the blocks tagged `fix` in the runbook, in document order, on the targets they name. Blocks tagged `check` run first and must exit 0. They prove the diagnostic commands still work.
-7. **Expect resolution.** Poll until the alert stops firing or `resolve_within` runs out. Record time to resolve.
-8. **Clean up.** Remove whatever the fault left behind, cancel the revert timer, delete the silence. Cleanup runs on every path, including failures and interrupts.
-9. **Control run, only after a pass.** Inject the same fault without running the runbook. If the alert clears anyway, the system healed itself and the verdict becomes `inconclusive`. The result is cached per fault and alert until the drill file changes.
+1. Preflight. Load the drill file and the runbook. Check that Prometheus and Alertmanager are reachable, the target is on the allowlist, and the alert is not already firing for that target.
+2. Silence. Create an Alertmanager silence that matches the alert name and the target's labels, for the length of the drill plus a margin. Prometheus still evaluates the rule, so the `ALERTS` series still shows the alert firing.
+3. Arm the revert. For a host fault, schedule the undo on the host before applying the fault, with `systemd-run --on-active=<limit>`. If the runner dies, the host reverts on its own.
+4. Inject. Apply the fault through its executor.
+5. Expect the alert. Poll Prometheus for `ALERTS{alertname=..., alertstate="firing"}` with the target's labels until it fires or `fire_within` runs out. Then confirm the alert reached Alertmanager and record which receiver it would have notified.
+6. Run the runbook. Run the blocks tagged `fix` in the runbook, in document order, on the targets they name. Blocks tagged `check` run first and must exit 0. They prove the diagnostic commands still work.
+7. Expect resolution. Poll until the alert stops firing or `resolve_within` runs out. Record time to resolve.
+8. Clean up. Remove whatever the fault left behind, cancel the revert timer, delete the silence. Cleanup runs on every path, including failures and interrupts.
+9. Control run, only after a pass. Inject the same fault without running the runbook. If the alert clears anyway, the system healed itself and the verdict becomes `inconclusive`. The result is cached per fault and alert until the drill file changes.
 
 ### Verdicts
 
@@ -208,9 +208,9 @@ The LLM helps write and repair runbooks and never decides a verdict.
 
 ## Releases
 
-- **v0.1:** CLI (`run`, `plan`, `lint`, `affected`), the Ansible collection with `stop_service`, `fill_filesystem`, `skew_clock` and `stop_container`, the libvirt drill environment, five drills with runbooks, the PR lane, and end-to-end CI.
-- **v0.2:** the kube-prometheus-stack drill pack, the scheduled lane, metrics and the Grafana dashboard, GitHub issues, Argo CD for the drill environment, a Helm chart that runs cluster-only drills as a CronJob, and drills for Private-Cloud.
-- **v0.3:** `annotate` and the verified fix loop, upgrade drills (run the pack, upgrade with Ansible, run it again), the AWS drill environment, and `expire_cert` and `drop_traffic`.
+- v0.1: CLI (`run`, `plan`, `lint`, `affected`), the Ansible collection with `stop_service`, `fill_filesystem`, `skew_clock` and `stop_container`, the libvirt drill environment, five drills with runbooks, the PR lane, and end-to-end CI.
+- v0.2: the kube-prometheus-stack drill pack, the scheduled lane, metrics and the Grafana dashboard, GitHub issues, Argo CD for the drill environment, a Helm chart that runs cluster-only drills as a CronJob, and drills for Private-Cloud.
+- v0.3: `annotate` and the verified fix loop, upgrade drills (run the pack, upgrade with Ansible, run it again), the AWS drill environment, and `expire_cert` and `drop_traffic`.
 
 ## Open questions
 
@@ -223,16 +223,16 @@ The LLM helps write and repair runbooks and never decides a verdict.
 
 The user asked for v0.1 to be built without them, on the laptop only (the lab GPU machines are for GPU work). These changes to the design above were made during the build:
 
-1. **Drill nodes are containers, not VMs.** There is no sudo and no libvirt on the laptop, so Terraform's Docker provider creates privileged systemd containers from a kind node image with sshd added. Ansible still provisions them over SSH and kubeadm still builds the cluster. Nodes share the host kernel and clock, so `skew_clock` and `expire_cert` are deferred to an environment with real VMs.
-2. **Results are JSON files, not SQLite.** `.drillbook/results.jsonl`, `active/`, `control-cache.json` and `snapshots/` keep the tool free of cgo.
-3. **Kubernetes faults joined Ansible faults.** Three of the five drills are bad deploys, so drills can scale or patch a Deployment. drillbook saves the Deployment's replicas and pod template first and restores them on revert.
-4. **Routing comes from Alertmanager itself.** drillbook reads the `receivers` field of `/api/v2/alerts` (including silenced alerts) instead of re-implementing the routing tree.
-5. **A ninth verdict, `revert-failed`,** ranks just below `aborted`. When drillbook cannot undo its own fault it says so and keeps the active record for `drillbook abort`.
-6. **Verdict precedence:** aborted, revert-failed, alert-did-not-fire, misrouted, step-failed, not-resolved, slower-than-runbook, inconclusive, pass. Every finding is still listed.
-7. **Drills can pick fix blocks** with `fixes: [name, ...]`, because one runbook often covers several causes and a drill injects one of them.
+1. Drill nodes are containers, not VMs. There is no sudo and no libvirt on the laptop, so Terraform's Docker provider creates privileged systemd containers from a kind node image with sshd added. Ansible still provisions them over SSH and kubeadm still builds the cluster. Nodes share the host kernel and clock, so `skew_clock` and `expire_cert` are deferred to an environment with real VMs.
+2. Results are JSON files, not SQLite. `.drillbook/results.jsonl`, `active/`, `control-cache.json` and `snapshots/` keep the tool free of cgo.
+3. Kubernetes faults joined Ansible faults. Three of the five drills are bad deploys, so drills can scale or patch a Deployment. drillbook saves the Deployment's replicas and pod template first and restores them on revert.
+4. Routing comes from Alertmanager itself. drillbook reads the `receivers` field of `/api/v2/alerts` (including silenced alerts) instead of re-implementing the routing tree.
+5. A ninth verdict, `revert-failed`, ranks just below `aborted`. When drillbook cannot undo its own fault it says so and keeps the active record for `drillbook abort`.
+6. Verdict precedence: aborted, revert-failed, alert-did-not-fire, misrouted, step-failed, not-resolved, slower-than-runbook, inconclusive, pass. Every finding is still listed.
+7. Drills can pick fix blocks with `fixes: [name, ...]`, because one runbook often covers several causes and a drill injects one of them.
 8. **Time to resolve is measured from the first runbook block**, diagnosis included.
-9. **Role tests are Ansible playbooks** run by `tests/roles/run.sh` against a throwaway node container, not Molecule.
-10. **Revert timers set `AccuracySec=1s`.** systemd's default of one minute made a CI test fail when the timer fired late.
+9. Role tests are Ansible playbooks run by `tests/roles/run.sh` against a throwaway node container, not Molecule.
+10. Revert timers set `AccuracySec=1s`. systemd's default of one minute made a CI test fail when the timer fired late.
 11. **`host:<name>` runbook blocks are checked against `allow.hosts`**, the same as fault targets.
-12. **No operator in v0.1.** The CLI runs from CI or an operator's machine, where Ansible inventories and SSH access already live.
+12. No operator in v0.1. The CLI runs from CI or an operator's machine, where Ansible inventories and SSH access already live.
 

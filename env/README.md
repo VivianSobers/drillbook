@@ -22,8 +22,8 @@ env/down.sh   # destroy nodes, volumes and network
 
 ## Things the drills taught us
 
-- **Monitoring runs on the control-plane node.** At first everything ran on the worker. The `kubelet-stopped` drill showed that `KubeNodeNotReady` could then never fire: about a minute after the worker went `NotReady`, the endpoints of Prometheus and kube-state-metrics on it were marked unready, so Prometheus could not be queried and kube-state-metrics was not scraped.
-- **The node image tag belongs to Terraform.** The role tests used to build the same tag with BuildKit, which gives a different image ID than Terraform's builder. The next `env/up.sh` then replaced both nodes in the middle of a drill. The role tests now use their own tag, and Terraform ignores image drift on running nodes. To move nodes to a new image, run `env/down.sh` and `env/up.sh`.
+- Monitoring runs on the control-plane node. At first everything ran on the worker. The `kubelet-stopped` drill showed that `KubeNodeNotReady` could then never fire: about a minute after the worker went `NotReady`, the endpoints of Prometheus and kube-state-metrics on it were marked unready, so Prometheus could not be queried and kube-state-metrics was not scraped.
+- The node image tag belongs to Terraform. The role tests used to build the same tag with BuildKit, which gives a different image ID than Terraform's builder. The next `env/up.sh` then replaced both nodes in the middle of a drill. The role tests now use their own tag, and Terraform ignores image drift on running nodes. To move nodes to a new image, run `env/down.sh` and `env/up.sh`.
 
 ## Limits
 
