@@ -158,3 +158,21 @@ Host faults are in the `drillbook.faults` Ansible collection under [ansible/coll
 | `drillbook abort` | Reverts faults and deletes silences left by interrupted drills |
 
 Results go to `.drillbook/results.jsonl`, and each drill keeps a full log under `.drillbook/logs/`.
+
+## Safety
+
+- Hosts and namespaces must be listed under `allow` in `drillbook.yaml`. Runbook blocks that target `host:<name>` are checked against the same list.
+- Every host fault arms its own revert timer before it is applied, and `revert_after` must leave at least 10 minutes past the drill's waits.
+- Silences match one alert and the drill's target labels, and expire on their own.
+- If a revert fails, the drill reports `revert-failed` and keeps a record, so `drillbook abort` can retry once the target is back.
+- `drillbook plan` shows exactly what a run will do.
+
+## The drill environment
+
+`env/up.sh` builds a small on-prem-style cluster on the local Docker daemon:
+
+- Terraform ([env/terraform](env/terraform)) creates privileged systemd containers from a kind node image with sshd added, plus a network, volumes and an SSH key, and writes an Ansible inventory.
+- Ansible ([env/ansible](env/ansible)) runs `kubeadm init` and `kubeadm join`, installs the pod network, installs kube-prometheus-stack with Helm, and deploys the shop demo service with its alert rules.
+- Alertmanager routes to two webhook receivers, `platform-oncall` and `shop-team`, that point at a closed port. Nobody gets paged, but the routing tree is real.
+
+The nodes share the host's kernel and clock, so clock faults cannot run in this environment.
