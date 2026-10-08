@@ -10,6 +10,7 @@ First release.
 - Nine verdicts, from `pass` to `revert-failed`, with every finding listed.
 - Drills silence their own alert for their target only, and keep the silence until the alert clears so nobody is paged.
 - Preflight waits for alerts left over from an earlier drill before giving up.
+- When a control run gets no result, because its fault could not be applied or the alert did not fire again, the drill's findings say so.
 - Drills can pick which fix blocks to run with `fixes:`.
 
 ### Faults
@@ -20,6 +21,7 @@ First release.
 ### Commands
 
 - `run`, `plan`, `lint`, `affected`, `abort`, `list`, `report` (markdown or Prometheus textfile) and `version`.
+- `abort` keeps a drill's silence while its alert is still firing and lets it expire, so cleaning up never pages anyone.
 - `run --github-issues owner/name` keeps one issue per failing drill.
 
 ### Packaging
