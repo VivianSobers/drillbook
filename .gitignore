@@ -1,0 +1,9 @@
+/.venv/
+/.drillbook/
+/bin/
+/dist/
+/env/.generated/
+.terraform/
+.terraform.lock.hcl.bak
+*.tfstate
+*.tfstate.backup
