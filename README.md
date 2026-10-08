@@ -97,3 +97,40 @@ find "$MOUNTPOINT" -xdev -type f -name '*.log.[0-9]*' -print -delete
 | `name` | Used in drill files and logs |
 
 Blocks run under `bash -euo pipefail` with the drill's `target.env` exported, so a runbook can say `"$NODE"` where a person would type the node name.
+
+## Writing a drill
+
+```yaml
+# drills/kubelet-stopped.yaml
+alert: KubeNodeNotReady
+runbook: ../runbooks/kubernetes/KubeNodeNotReady.md
+target:
+  host: drillbook-worker            # Ansible inventory name
+  labels: {node: drillbook-worker}  # must match the alert; also scopes the silence
+  env: {NODE: drillbook-worker}     # exported to runbook blocks
+fault:
+  ansible:
+    role: drillbook.faults.stop_service
+    vars: {stop_service_name: kubelet}
+  revert_after: 50m                 # host-side safety timer
+fire_within: 25m
+resolve_within: 10m
+expected_resolve: 5m                # optional: the runbook's own promise
+expect:
+  receiver: platform-oncall         # optional routing check
+```
+
+A runbook that covers several causes can list them all; `fixes: [scale-up]` makes a drill run only the fix for the cause it injects.
+
+Kubernetes faults change a Deployment the way a bad deploy would. drillbook saves the Deployment's replicas and pod template first and restores them afterwards:
+
+```yaml
+fault:
+  kube:
+    namespace: shop
+    deployment: shop-api
+    patch:
+      type: json                    # json, merge or strategic
+      body:
+        - {op: add, path: /spec/template/spec/containers/0/args/-, value: --cache-size=512}
+```
