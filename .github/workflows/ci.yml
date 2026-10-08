@@ -1,0 +1,67 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race ./...
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install ansible-core==2.21.5 ansible-lint
+      - run: ansible-lint ansible/collections/ansible_collections/drillbook/faults tests/roles env/ansible
+      - name: Fault role tests
+        run: tests/roles/run.sh stop_service fill_filesystem
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.5
+      - run: terraform -chdir=env/terraform fmt -check -recursive
+      - run: terraform -chdir=env/terraform init -backend=false -input=false
+      - run: terraform -chdir=env/terraform validate
+
+  rules-and-drills:
+    runs-on: ubuntu-latest
+    env:
+      PROMETHEUS_VERSION: 3.15.0
+      PINT_VERSION: 0.89.1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install promtool and pint
+        run: |
+          curl -sSfL "https://github.com/prometheus/prometheus/releases/download/v${PROMETHEUS_VERSION}/prometheus-${PROMETHEUS_VERSION}.linux-amd64.tar.gz" \
+            | tar xz --strip-components=1 -C /usr/local/bin "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
+          curl -sSfL "https://github.com/cloudflare/pint/releases/download/v${PINT_VERSION}/pint-${PINT_VERSION}-linux-amd64.tar.gz" \
+            | tar xz -C /tmp && sudo mv /tmp/pint-linux-amd64 /usr/local/bin/pint
+      - run: promtool check rules examples/shop/rules.yaml
+      - run: promtool test rules examples/shop/rules_test.yaml
+      - run: pint lint examples/shop/rules.yaml
+      - run: go run ./cmd/drillbook lint --rules examples/shop/rules.yaml

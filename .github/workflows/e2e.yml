@@ -1,0 +1,82 @@
+name: e2e
+
+# Builds the drill environment on the runner and runs real drills against it.
+on:
+  workflow_dispatch:
+    inputs:
+      drills:
+        description: Drills to run (space separated). Empty runs shop-api-scaled-to-zero.
+        required: false
+        default: ""
+  schedule:
+    - cron: "17 3 * * 1"
+  pull_request:
+    paths:
+      - "env/**"
+      - "drills/**"
+      - "runbooks/**"
+      - "examples/**"
+      - "internal/**"
+      - "ansible/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  drills:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+      - uses: azure/setup-kubectl@v5
+        with:
+          version: v1.36.4
+      - run: pip install ansible-core==2.21.5
+      - run: go build -o bin/drillbook ./cmd/drillbook
+      - name: Build the drill environment
+        run: env/up.sh
+      - name: Install pint
+        run: |
+          curl -sSfL https://github.com/cloudflare/pint/releases/download/v0.89.1/pint-0.89.1-linux-amd64.tar.gz \
+            | tar xz -C /tmp && sudo mv /tmp/pint-linux-amd64 /usr/local/bin/pint
+      - name: Check rule series against the drill Prometheus
+        run: pint -c env/pint/drill.hcl lint examples/shop/rules.yaml
+      - name: Choose drills
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            drills=$(bin/drillbook affected "origin/${{ github.base_ref }}...HEAD" --max-fire-within 20m | tr '\n' ' ')
+          else
+            drills="${{ github.event.inputs.drills }}"
+          fi
+          echo "drills=${drills:-shop-api-scaled-to-zero}" >> "$GITHUB_OUTPUT"
+      - name: Run drills
+        run: bin/drillbook run ${{ steps.pick.outputs.drills }}
+      - name: Revert anything left behind
+        if: always()
+        run: bin/drillbook abort || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: drillbook-results
+          path: .drillbook/
+          if-no-files-found: ignore
