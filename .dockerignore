@@ -1,0 +1,9 @@
+.git
+.venv
+.drillbook
+.superpowers
+.remember
+bin
+dist
+env/.generated
+env/terraform/.terraform
