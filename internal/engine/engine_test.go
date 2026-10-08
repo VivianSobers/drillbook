@@ -44,6 +44,8 @@ type world struct {
 	silenceErr error
 	// promDownAfterApply makes Prometheus unreachable once the fault is applied.
 	promDownAfterApply bool
+	// firingUntil makes the alert fire, left over from something earlier, until then.
+	firingUntil time.Time
 	// stuckFiring keeps the alert firing after the fault is reverted.
 	stuckFiring bool
 	// lingerAfterRevert keeps the alert firing this long after a revert.
@@ -52,7 +54,7 @@ type world struct {
 }
 
 func (w *world) firing() bool {
-	if w.alreadyFired || w.stuckFiring && w.applies > 0 {
+	if w.alreadyFired || w.stuckFiring && w.applies > 0 || w.now.Before(w.firingUntil) {
 		return true
 	}
 	if !w.faultOn && !w.revertedAt.IsZero() && w.now.Sub(w.revertedAt) < w.lingerAfterRevert {
@@ -528,4 +530,13 @@ func (d deleteWatcher) DeleteSilence(ctx context.Context, id string) error {
 		*d.flagged = true
 	}
 	return d.wam.DeleteSilence(ctx, id)
+}
+
+func TestPreflightWaitsForALeftoverAlertToClear(t *testing.T) {
+	w, e, _ := setup(t)
+	w.firingUntil = w.now.Add(3 * time.Minute) // still firing from an earlier drill
+	r := e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{SkipControl: true})
+	if r.Verdict != Pass {
+		t.Fatalf("a leftover alert that clears within resolve_within must not abort the drill: %s %v", r.Verdict, r.Findings)
+	}
 }

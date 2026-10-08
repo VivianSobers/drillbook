@@ -133,7 +133,16 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 		return abort("preflight: " + err.Error())
 	}
 	if firing {
-		return abort(d.Alert + " is already firing for this target")
+		// Often left over from an earlier drill in the same batch; give it
+		// resolve_within to clear before giving up.
+		say("%s is already firing for this target; waiting up to %v for it to clear", d.Alert, d.ResolveWithin.Duration)
+		firing, err = e.waitFor(ctx, d, false, d.ResolveWithin.Duration)
+		if err != nil {
+			return abort("preflight: " + interrupted(err))
+		}
+		if firing {
+			return abort(d.Alert + " is already firing for this target")
+		}
 	}
 
 	window := 2*(d.FireWithin.Duration+d.ResolveWithin.Duration) + 15*time.Minute
