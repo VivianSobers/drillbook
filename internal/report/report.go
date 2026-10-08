@@ -8,20 +8,21 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/VivianSobers/drillbook/internal/engine"
 )
 
-// Load reads a results file and keeps the last result of each drill, sorted by drill name.
-func Load(path string) ([]engine.Result, error) {
+// LoadAll reads every result in a results file, in file order.
+func LoadAll(path string) ([]engine.Result, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	latest := map[string]engine.Result{}
+	var all []engine.Result
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for n := 1; sc.Scan(); n++ {
@@ -29,17 +30,83 @@ func Load(path string) ([]engine.Result, error) {
 		if err := json.Unmarshal(sc.Bytes(), &r); err != nil {
 			return nil, fmt.Errorf("%s line %d: %w", path, n, err)
 		}
-		latest[r.Drill] = r
+		all = append(all, r)
 	}
-	if err := sc.Err(); err != nil {
+	return all, sc.Err()
+}
+
+// Load reads a results file and keeps the last result of each drill, sorted by drill name.
+func Load(path string) ([]engine.Result, error) {
+	all, err := LoadAll(path)
+	if err != nil {
 		return nil, err
 	}
-	out := make([]engine.Result, 0, len(latest))
-	for _, r := range latest {
+	return latest(all), nil
+}
+
+func latest(all []engine.Result) []engine.Result {
+	byDrill := map[string]engine.Result{}
+	for _, r := range all {
+		byDrill[r.Drill] = r
+	}
+	out := make([]engine.Result, 0, len(byDrill))
+	for _, r := range byDrill {
 		out = append(out, r)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Drill < out[j].Drill })
-	return out, nil
+	return out
+}
+
+// Prometheus renders results in the text exposition format, for node_exporter's
+// textfile collector, so drill freshness can be alerted on like anything else.
+func Prometheus(all []engine.Result) string {
+	lastPass := map[string]engine.Result{}
+	for _, r := range all {
+		if r.Verdict.Passed() {
+			lastPass[r.Drill] = r
+		}
+	}
+	var b strings.Builder
+	metric := func(name, help string, rows func(write func(r engine.Result, v float64))) {
+		fmt.Fprintf(&b, "# HELP %s %s\n# TYPE %s gauge\n", name, help, name)
+		rows(func(r engine.Result, v float64) {
+			fmt.Fprintf(&b, "%s{alert=%s,drill=%s} %s\n", name, quote(r.Alert), quote(r.Drill), strconv.FormatFloat(v, 'f', -1, 64))
+		})
+	}
+	cur := latest(all)
+	metric("drillbook_drill_last_run_timestamp_seconds", "Start time of the latest run of the drill.", func(w func(engine.Result, float64)) {
+		for _, r := range cur {
+			w(r, float64(r.Started.Unix()))
+		}
+	})
+	metric("drillbook_drill_last_success_timestamp_seconds", "Start time of the latest passing run of the drill.", func(w func(engine.Result, float64)) {
+		for _, r := range cur {
+			if p, ok := lastPass[r.Drill]; ok {
+				w(p, float64(p.Started.Unix()))
+			}
+		}
+	})
+	metric("drillbook_drill_passed", "1 if the latest run of the drill passed.", func(w func(engine.Result, float64)) {
+		for _, r := range cur {
+			v := 0.0
+			if r.Verdict.Passed() {
+				v = 1
+			}
+			w(r, v)
+		}
+	})
+	metric("drillbook_drill_resolve_seconds", "Time from the first runbook block to the alert clearing, in the latest passing run.", func(w func(engine.Result, float64)) {
+		for _, r := range cur {
+			if p, ok := lastPass[r.Drill]; ok && p.ResolvedAfter.Duration > 0 {
+				w(p, p.ResolvedAfter.Seconds())
+			}
+		}
+	})
+	return b.String()
+}
+
+func quote(v string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`).Replace(v) + `"`
 }
 
 // Markdown renders results as a table followed by each drill's findings.

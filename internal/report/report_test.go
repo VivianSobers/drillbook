@@ -61,3 +61,35 @@ func TestLoadBadLine(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+const history = `{"drill":"a","id":"a-1","alert":"A","verdict":"pass","started":"2026-10-08T10:00:00Z","finished":"2026-10-08T10:20:00Z","fired_after":"1m0s","resolved_after":"30s","control_ran":true,"control_cleared":false,"log":"x"}
+{"drill":"a","id":"a-2","alert":"A","verdict":"not-resolved","started":"2026-10-08T12:00:00Z","finished":"2026-10-08T12:30:00Z","fired_after":"1m0s","resolved_after":"0s","control_ran":false,"control_cleared":false,"log":"x"}
+{"drill":"b","id":"b-1","alert":"B \"quoted\"","verdict":"aborted","started":"2026-10-08T11:00:00Z","finished":"2026-10-08T11:00:05Z","fired_after":"0s","resolved_after":"0s","control_ran":false,"control_cleared":false,"log":"x"}
+`
+
+func TestPrometheusTextfile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "results.jsonl")
+	if err := os.WriteFile(p, []byte(history), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	all, err := LoadAll(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := Prometheus(all)
+	for _, want := range []string{
+		"# TYPE drillbook_drill_last_run_timestamp_seconds gauge",
+		`drillbook_drill_last_run_timestamp_seconds{alert="A",drill="a"} 1791460800`,
+		`drillbook_drill_last_success_timestamp_seconds{alert="A",drill="a"} 1791453600`,
+		`drillbook_drill_passed{alert="A",drill="a"} 0`,
+		`drillbook_drill_resolve_seconds{alert="A",drill="a"} 30`,
+		`drillbook_drill_passed{alert="B \"quoted\"",drill="b"} 0`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, `drillbook_drill_last_success_timestamp_seconds{alert="B`) {
+		t.Error("a drill that never passed has no last-success series; the stale alert uses absent()")
+	}
+}
