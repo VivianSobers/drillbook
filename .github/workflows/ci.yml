@@ -72,3 +72,13 @@ jobs:
       - uses: actions/checkout@v7
       - run: docker build -t drillbook:ci .
       - run: docker run --rm drillbook:ci version
+
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v5
+        with:
+          version: v4.3.0
+      - run: helm lint charts/drillbook --set 'config.allow.namespaces={shop}'
+      - run: helm template t charts/drillbook --set 'config.allow.namespaces={shop}' --set githubIssues.repo=o/r --set githubIssues.tokenSecret=t > /dev/null
