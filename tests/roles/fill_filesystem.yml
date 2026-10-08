@@ -48,7 +48,8 @@
   gather_facts: false
   vars:
     drillbook_drill_id: t-fill-2
-    drillbook_revert_after: 3
+    # Long enough for the remaining apply tasks to finish over SSH first.
+    drillbook_revert_after: 15
     fill_filesystem_path: /var/lib/app-data
     fill_filesystem_file: logs/app.log.1
   tasks:
@@ -61,7 +62,7 @@
         path: /var/lib/app-data/logs/app.log.1
       register: f
       until: not f.stat.exists
-      retries: 20
+      retries: 40
       delay: 1
 
 - name: Fill_filesystem refuses large filesystems

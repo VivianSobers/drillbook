@@ -27,18 +27,18 @@
       refusing to fill {{ fill_filesystem_path }}: size {{ fill_filesystem_size }} bytes
       (max_fs_bytes {{ fill_filesystem_max_fs_bytes }}), would write {{ fill_filesystem_bytes }} bytes
 
+- name: Create the parent directory
+  ansible.builtin.file:
+    path: "{{ fill_filesystem_target | dirname }}"
+    state: directory
+    mode: "0755"
+
 - name: Arm the revert timer
   ansible.builtin.include_role:
     name: drillbook.faults.revert_timer
     tasks_from: arm
   vars:
     revert_timer_command: "rm -f {{ fill_filesystem_target | quote }}"
-
-- name: Create the parent directory
-  ansible.builtin.file:
-    path: "{{ fill_filesystem_target | dirname }}"
-    state: directory
-    mode: "0755"
 
 - name: Write the fill file
   ansible.builtin.command:
