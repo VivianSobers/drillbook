@@ -42,6 +42,8 @@ type world struct {
 	cancel     context.CancelFunc
 	promErr    error
 	silenceErr error
+	// promDownAfterApply makes Prometheus unreachable once the fault is applied.
+	promDownAfterApply bool
 }
 
 func (w *world) firing() bool {
@@ -115,6 +117,9 @@ func (f wfault) Apply(ctx context.Context, d *drill.Drill, id string, log io.Wri
 	}
 	f.w.faultOn = true
 	f.w.faultSince = f.w.now
+	if f.w.promDownAfterApply {
+		f.w.promErr = errors.New("dial tcp: connection refused")
+	}
 	return nil
 }
 func (f wfault) Revert(ctx context.Context, d *drill.Drill, id string, log io.Writer) error {
@@ -442,4 +447,17 @@ func TestProgressLinesRoundDurations(t *testing.T) {
 	if !strings.Contains(out.String(), "fired after 15m5s\n") {
 		t.Fatalf("want a rounded 'fired after 15m5s' line:\n%s", out.String())
 	}
+}
+
+func TestRunPrometheusDownDuringWaitIsNotAVerdictAboutTheAlert(t *testing.T) {
+	w, e, st := setup(t)
+	w.promDownAfterApply = true
+	r := e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{})
+	if r.Verdict != Aborted {
+		t.Fatalf("an unreachable Prometheus must abort, not claim the alert did not fire: %s %v", r.Verdict, r.Findings)
+	}
+	if !strings.Contains(strings.Join(r.Findings, ""), "connection refused") {
+		t.Errorf("findings %v must carry the Prometheus error", r.Findings)
+	}
+	assertCleanedUp(t, w, st)
 }

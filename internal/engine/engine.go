@@ -303,7 +303,9 @@ func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io
 }
 
 // waitFor polls until the alert's firing state equals want or within passes.
-// It returns the last observed state.
+// It returns the last observed state. If Prometheus could not be asked at the
+// deadline it returns an error instead: an unreachable Prometheus says nothing
+// about the alert.
 func (e *Engine) waitFor(ctx context.Context, d *drill.Drill, want bool, within time.Duration) (bool, error) {
 	deadline := e.Clock.Now().Add(within)
 	for {
@@ -312,6 +314,9 @@ func (e *Engine) waitFor(ctx context.Context, d *drill.Drill, want bool, within 
 			return firing, nil
 		}
 		if !e.Clock.Now().Before(deadline) {
+			if err != nil {
+				return false, fmt.Errorf("prometheus: %w", err)
+			}
 			return firing, nil
 		}
 		if err := e.Clock.Sleep(ctx, e.Poll); err != nil {
