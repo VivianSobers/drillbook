@@ -79,6 +79,12 @@ resource "docker_container" "node" {
     ipv4_address = each.value.ip
   }
 
+  # A rebuilt image tag must not silently replace running cluster nodes.
+  # To roll nodes onto a new image, run env/down.sh and env/up.sh.
+  lifecycle {
+    ignore_changes = [image]
+  }
+
   upload {
     content     = tls_private_key.ssh.public_key_openssh
     file        = "/root/.ssh/authorized_keys"

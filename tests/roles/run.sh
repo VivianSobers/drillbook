@@ -14,14 +14,14 @@ cleanup() {
 }
 trap cleanup EXIT
 
-docker build -q -t drillbook-node:v1.36.4 env/node-image >/dev/null
+docker build -q -t drillbook-node:roletest env/node-image >/dev/null
 ssh-keygen -q -t ed25519 -N '' -f "$WORK/id"
 docker rm -f "$NODE" "$APP" >/dev/null 2>&1 || true
 docker run -d --name "$NODE" --hostname "$NODE" --privileged \
   --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
   --tmpfs /tmp --tmpfs /run --tmpfs /var/lib/app-data:size=64m \
   --volume /lib/modules:/lib/modules:ro --cgroupns=private \
-  drillbook-node:v1.36.4 >/dev/null
+  drillbook-node:roletest >/dev/null
 docker run -d --name "$APP" alpine:3.22 sleep 3600 >/dev/null
 
 until docker exec "$NODE" systemctl is-active ssh >/dev/null 2>&1; do sleep 1; done
