@@ -432,3 +432,14 @@ func TestRunUnknownFixAbortsBeforeFault(t *testing.T) {
 		t.Fatalf("verdict %s applies %d", r.Verdict, w.applies)
 	}
 }
+
+func TestProgressLinesRoundDurations(t *testing.T) {
+	_, e, _ := setup(t)
+	var out bytes.Buffer
+	e.Out = &out
+	e.Poll = 7300 * time.Millisecond
+	e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{SkipControl: true})
+	if !strings.Contains(out.String(), "fired after 15m5s\n") {
+		t.Fatalf("want a rounded 'fired after 15m5s' line:\n%s", out.String())
+	}
+}

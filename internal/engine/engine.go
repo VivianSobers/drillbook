@@ -202,7 +202,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 	obs.Fired = true
 	obs.FiredAfter = e.Clock.Now().Sub(faultAt)
 	res.FiredAfter.Duration = obs.FiredAfter
-	say("%s fired after %v", d.Alert, obs.FiredAfter)
+	say("%s fired after %v", d.Alert, obs.FiredAfter.Round(time.Second))
 
 	obs.Receivers, err = e.receivers(ctx, d)
 	if err != nil {
@@ -233,7 +233,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 		if obs.Resolved {
 			obs.ResolvedAfter = e.Clock.Now().Sub(runbookAt)
 			res.ResolvedAfter.Duration = obs.ResolvedAfter
-			say("%s cleared %v after the runbook started", d.Alert, obs.ResolvedAfter)
+			say("%s cleared %v after the runbook started", d.Alert, obs.ResolvedAfter.Round(time.Second))
 		}
 	}
 	out = obs
