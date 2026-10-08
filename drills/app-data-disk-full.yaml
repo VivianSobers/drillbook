@@ -1,0 +1,25 @@
+# Rotated logs fill the worker's application data volume to 4% free.
+# NodeFilesystemAlmostOutOfSpace (warning) should fire; deleting rotated logs fixes it.
+alert: NodeFilesystemAlmostOutOfSpace
+runbook: ../runbooks/node/NodeFilesystemAlmostOutOfSpace.md
+target:
+  host: drillbook-worker
+  labels:
+    instance: "172.31.250.11:9100"
+    mountpoint: /var/lib/app-data
+    severity: warning
+  env: {MOUNTPOINT: /var/lib/app-data}
+fault:
+  ansible:
+    role: drillbook.faults.fill_filesystem
+    vars:
+      fill_filesystem_path: /var/lib/app-data
+      fill_filesystem_file: logs/app.log.1
+      fill_filesystem_leave_free_percent: 4
+  revert_after: 75m
+fire_within: 40m
+resolve_within: 5m
+expected_resolve: 2m
+expect:
+  receiver: platform-oncall
+schedule: weekly
