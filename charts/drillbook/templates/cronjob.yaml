@@ -1,0 +1,82 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "drillbook.name" . }}
+  labels:
+    {{- include "drillbook.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  # Two drills breaking the same thing at once would judge each other.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            {{- include "drillbook.labels" . | nindent 12 }}
+          annotations:
+            checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        spec:
+          serviceAccountName: {{ include "drillbook.name" . }}
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+          containers:
+            - name: drillbook
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              workingDir: /work
+              args:
+                {{- toYaml .Values.args | nindent 16 }}
+                {{- if .Values.githubIssues.repo }}
+                - --github-issues
+                - {{ .Values.githubIssues.repo }}
+                {{- end }}
+              env:
+                # kubectl in runbook blocks writes its cache under $HOME.
+                - name: HOME
+                  value: /tmp
+              {{- if .Values.githubIssues.tokenSecret }}
+                - name: GITHUB_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.githubIssues.tokenSecret }}
+                      key: token
+              {{- end }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              resources:
+                {{- toYaml .Values.resources | nindent 16 }}
+              volumeMounts:
+                - name: config
+                  mountPath: /work/drillbook.yaml
+                  subPath: drillbook.yaml
+                - name: drills
+                  mountPath: /work/drills
+                - name: runbooks
+                  mountPath: /work/runbooks
+                - name: state
+                  mountPath: /state
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: config
+              configMap:
+                name: {{ include "drillbook.name" . }}-config
+            - name: drills
+              configMap:
+                name: {{ include "drillbook.name" . }}-drills
+            - name: runbooks
+              configMap:
+                name: {{ include "drillbook.name" . }}-runbooks
+            - name: state
+              emptyDir: {}
+            - name: tmp
+              emptyDir: {}
