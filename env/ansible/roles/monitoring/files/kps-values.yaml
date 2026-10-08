@@ -1,4 +1,17 @@
 # kube-prometheus-stack values for the drill environment.
+#
+# The monitoring stack runs on the control-plane node, away from the worker the
+# drills break. The first version ran it on the worker, and the kubelet-stopped
+# drill found that KubeNodeNotReady could never fire there: once the worker went
+# NotReady, its endpoints were marked unready, so Prometheus could neither be
+# queried nor scrape kube-state-metrics.
+x-infra-node: &infra
+  nodeSelector:
+    node-role.kubernetes.io/control-plane: ""
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
 grafana:
   enabled: false
 prometheus:
@@ -6,6 +19,7 @@ prometheus:
     type: NodePort
     nodePort: 30090
   prometheusSpec:
+    <<: *infra
     retention: 2d
     evaluationInterval: 30s
     scrapeInterval: 30s
@@ -16,6 +30,8 @@ prometheus:
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
 alertmanager:
+  alertmanagerSpec:
+    <<: *infra
   service:
     type: NodePort
     nodePort: 30093
@@ -56,6 +72,13 @@ alertmanager:
         webhook_configs:
           - url: http://127.0.0.1:9/shop-team
             send_resolved: true
+prometheusOperator:
+  <<: *infra
+  admissionWebhooks:
+    patch:
+      <<: *infra
+kube-state-metrics:
+  <<: *infra
 kubeEtcd:
   service:
     targetPort: 2381
