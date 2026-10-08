@@ -161,6 +161,8 @@ Host faults are in the `drillbook.faults` Ansible collection under [ansible/coll
 
 Results go to `.drillbook/results.jsonl`, and each drill keeps a full log under `.drillbook/logs/`.
 
+With `--github-issues owner/name` and a `GITHUB_TOKEN`, `drillbook run` keeps one issue per failing drill: it opens the issue on the first failure, comments on later ones, and closes it when the drill passes again. The weekly e2e workflow runs this way.
+
 ## Metrics and alerts on drills
 
 A drill that quietly stops running looks exactly like one that keeps passing, so drillbook exports its results as metrics:
