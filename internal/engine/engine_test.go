@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -51,6 +52,10 @@ type world struct {
 	// lingerAfterRevert keeps the alert firing this long after a revert.
 	lingerAfterRevert time.Duration
 	revertedAt        time.Time
+	// failApplyAt makes only that apply (1-based) fail.
+	failApplyAt int
+	// fireOnlyOnce stops the alert from firing after the first apply.
+	fireOnlyOnce bool
 }
 
 func (w *world) firing() bool {
@@ -60,7 +65,7 @@ func (w *world) firing() bool {
 	if !w.faultOn && !w.revertedAt.IsZero() && w.now.Sub(w.revertedAt) < w.lingerAfterRevert {
 		return true
 	}
-	if !w.faultOn {
+	if !w.faultOn || w.fireOnlyOnce && w.applies > 1 {
 		return false
 	}
 	if w.healAfter > 0 && w.now.Sub(w.faultSince) >= w.healAfter {
@@ -124,6 +129,9 @@ func (f wfault) Apply(ctx context.Context, d *drill.Drill, id string, log io.Wri
 	f.w.applies++
 	if f.w.applyErr != nil {
 		return f.w.applyErr
+	}
+	if f.w.applies == f.w.failApplyAt {
+		return errors.New("ssh: connection refused")
 	}
 	f.w.faultOn = true
 	f.w.faultSince = f.w.now
@@ -373,6 +381,37 @@ func TestRunUsesCachedControl(t *testing.T) {
 	if w.applies != 1 {
 		t.Errorf("cached control must not re-apply the fault, applies = %d", w.applies)
 	}
+}
+
+func TestRunControlApplyFailureIsAFinding(t *testing.T) {
+	w, e, st := setup(t)
+	w.failApplyAt = 2
+	r := e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{})
+	if r.Verdict != Pass || r.ControlRan {
+		t.Fatalf("verdict %s controlRan %v", r.Verdict, r.ControlRan)
+	}
+	if !slices.ContainsFunc(r.Findings, func(f string) bool {
+		return strings.Contains(f, "control run") && strings.Contains(f, "connection refused")
+	}) {
+		t.Errorf("findings must say why there is no control result: %v", r.Findings)
+	}
+	if _, ok := st.Control("hash1"); ok {
+		t.Error("a control that never ran must not be cached")
+	}
+	assertCleanedUp(t, w, st)
+}
+
+func TestRunControlAlertNotFiringAgainIsAFinding(t *testing.T) {
+	w, e, st := setup(t)
+	w.fireOnlyOnce = true
+	r := e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{})
+	if r.Verdict != Pass || r.ControlRan {
+		t.Fatalf("verdict %s controlRan %v", r.Verdict, r.ControlRan)
+	}
+	if !slices.ContainsFunc(r.Findings, func(f string) bool { return strings.Contains(f, "did not fire again") }) {
+		t.Errorf("findings = %v", r.Findings)
+	}
+	assertCleanedUp(t, w, st)
 }
 
 func TestRunSkipControl(t *testing.T) {

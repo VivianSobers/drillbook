@@ -270,7 +270,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 			say("control run cached: cleared without runbook = %v", cleared)
 			return out
 		}
-		ran, cleared, rerr, err := e.control(ctx, d, id+"-control", logw, say, health)
+		ran, cleared, note, rerr, err := e.control(ctx, d, id+"-control", logw, say, health)
 		if rerr != nil {
 			out.RevertFailed = rerr.Error()
 		}
@@ -280,6 +280,9 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 			return a
 		}
 		out.ControlRan, out.ControlCleared = ran, cleared
+		if note != "" {
+			out.Notes = append(out.Notes, note)
+		}
 		if ran {
 			if err := e.State.SaveControl(d.Hash, cleared); err != nil {
 				say("could not cache control result: %v", err)
@@ -290,12 +293,12 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 }
 
 // control re-applies the fault without running the runbook and reports
-// whether the alert cleared on its own.
-func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io.Writer, say func(string, ...any), health *promHealth) (ran, cleared bool, revertErr, err error) {
+// whether the alert cleared on its own. When it gets no result, note says why.
+func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io.Writer, say func(string, ...any), health *promHealth) (ran, cleared bool, note string, revertErr, err error) {
 	cleanCtx := context.WithoutCancel(ctx)
 	say("control run: re-applying the fault without the runbook")
 	if err := e.State.MarkActive(state.Active{ID: id, DrillFile: d.File, Started: e.Clock.Now()}); err != nil {
-		return false, false, nil, err
+		return false, false, "", nil, err
 	}
 	defer func() {
 		say("control run: reverting fault")
@@ -306,22 +309,25 @@ func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io
 		_ = e.State.ClearActive(id)
 	}()
 	if err := e.Faults.Apply(ctx, d, id, logw); err != nil {
-		say("control run: apply failed: %v", err)
-		return false, false, nil, nil
+		note = fmt.Sprintf("no control result: control run could not apply the fault: %v", err)
+		say("%s", note)
+		return false, false, note, nil, nil
 	}
 	fired, err := e.waitFor(ctx, d, true, d.FireWithin.Duration, health)
-	if err != nil || !fired {
-		if err == nil {
-			say("control run: alert did not fire again; no control result")
-		}
-		return false, false, nil, err
+	if err != nil {
+		return false, false, "", nil, err
+	}
+	if !fired {
+		note = fmt.Sprintf("no control result: %s did not fire again in the control run", d.Alert)
+		say("%s", note)
+		return false, false, note, nil, nil
 	}
 	still, err := e.waitFor(ctx, d, false, d.ResolveWithin.Duration, health)
 	if err != nil {
-		return false, false, nil, err
+		return false, false, "", nil, err
 	}
 	say("control run: cleared without runbook = %v", !still)
-	return true, !still, nil, nil
+	return true, !still, "", nil, nil
 }
 
 // waitFor polls until the alert's firing state equals want or within passes.
