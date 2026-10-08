@@ -44,10 +44,18 @@ type world struct {
 	silenceErr error
 	// promDownAfterApply makes Prometheus unreachable once the fault is applied.
 	promDownAfterApply bool
+	// stuckFiring keeps the alert firing after the fault is reverted.
+	stuckFiring bool
+	// lingerAfterRevert keeps the alert firing this long after a revert.
+	lingerAfterRevert time.Duration
+	revertedAt        time.Time
 }
 
 func (w *world) firing() bool {
-	if w.alreadyFired {
+	if w.alreadyFired || w.stuckFiring && w.applies > 0 {
+		return true
+	}
+	if !w.faultOn && !w.revertedAt.IsZero() && w.now.Sub(w.revertedAt) < w.lingerAfterRevert {
 		return true
 	}
 	if !w.faultOn {
@@ -124,6 +132,9 @@ func (f wfault) Apply(ctx context.Context, d *drill.Drill, id string, log io.Wri
 }
 func (f wfault) Revert(ctx context.Context, d *drill.Drill, id string, log io.Writer) error {
 	f.w.reverts++
+	if f.w.faultOn {
+		f.w.revertedAt = f.w.now
+	}
 	f.w.faultOn = false
 	return nil
 }
@@ -459,5 +470,62 @@ func TestRunPrometheusDownDuringWaitIsNotAVerdictAboutTheAlert(t *testing.T) {
 	if !strings.Contains(strings.Join(r.Findings, ""), "connection refused") {
 		t.Errorf("findings %v must carry the Prometheus error", r.Findings)
 	}
+	if w.faultOn {
+		t.Error("fault must be reverted")
+	}
+	// With Prometheus down nobody can tell whether the alert still fires, so
+	// the silence stays until it expires rather than risk paging someone.
+	if len(w.silences) != 1 || !strings.Contains(strings.Join(r.Findings, "\n"), "left silence") {
+		t.Errorf("silences %v findings %v", w.silences, r.Findings)
+	}
+	if a, _ := st.Active(); len(a) != 0 {
+		t.Errorf("active = %v", a)
+	}
+}
+
+func TestSilenceStaysUntilTheAlertClearsAfterRevert(t *testing.T) {
+	w, e, st := setup(t)
+	w.lingerAfterRevert = 90 * time.Second // the control run's alert takes a while to clear
+	var deletedWhileFiring bool
+	e.AM = deleteWatcher{wam{w}, w, &deletedWhileFiring}
+	r := e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{})
+	if r.Verdict != Pass {
+		t.Fatalf("verdict %s %v", r.Verdict, r.Findings)
+	}
+	if deletedWhileFiring {
+		t.Fatal("the silence was deleted while the alert was still firing, which would page someone")
+	}
 	assertCleanedUp(t, w, st)
+}
+
+func TestSilenceLeftToExpireWhenAlertNeverClears(t *testing.T) {
+	w, e, _ := setup(t)
+	w.stuckFiring = true
+	w.fireDelay = 0
+	var deletedWhileFiring bool
+	e.AM = deleteWatcher{wam{w}, w, &deletedWhileFiring}
+	r := e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{})
+	if deletedWhileFiring {
+		t.Fatal("the silence was deleted while the alert was still firing")
+	}
+	if len(w.silences) != 1 {
+		t.Fatalf("the silence must be left to expire, got %v", w.silences)
+	}
+	if !strings.Contains(strings.Join(r.Findings, "\n"), "left silence") {
+		t.Errorf("findings %v must say the silence was left in place", r.Findings)
+	}
+}
+
+// deleteWatcher records whether a silence was deleted while its alert fired.
+type deleteWatcher struct {
+	wam
+	w       *world
+	flagged *bool
+}
+
+func (d deleteWatcher) DeleteSilence(ctx context.Context, id string) error {
+	if d.w.firing() {
+		*d.flagged = true
+	}
+	return d.wam.DeleteSilence(ctx, id)
 }

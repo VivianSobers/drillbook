@@ -46,6 +46,9 @@ type Observations struct {
 
 	ControlRan     bool
 	ControlCleared bool
+
+	// Notes are findings that do not change the verdict.
+	Notes []string
 }
 
 // Decide turns observations into one verdict plus every finding that applies.
@@ -53,6 +56,11 @@ type Observations struct {
 // aborted, revert-failed, alert-did-not-fire, misrouted, step-failed, not-resolved,
 // slower-than-runbook, inconclusive.
 func Decide(o Observations) (Verdict, []string) {
+	v, f := decide(o)
+	return v, append(f, o.Notes...)
+}
+
+func decide(o Observations) (Verdict, []string) {
 	if o.Aborted {
 		return Aborted, []string{"aborted: " + o.AbortReason}
 	}

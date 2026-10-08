@@ -149,7 +149,19 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 
 	obs = e.drive(ctx, d, append(rb.Checks(), fixes...), opts, id, obs, &res, logw, say)
 
-	e.deleteSilence(silence, say)
+	// Deleting the silence while the alert still fires would page someone, so
+	// wait for it to clear after the revert. If it does not, leave the silence
+	// to expire on its own.
+	say("waiting up to %v for %s to clear before removing the silence", d.ResolveWithin.Duration, d.Alert)
+	still, err := e.waitFor(context.WithoutCancel(ctx), d, false, d.ResolveWithin.Duration)
+	if err == nil && !still {
+		e.deleteSilence(silence, say)
+	} else {
+		note := fmt.Sprintf("%s was still firing after the fault was reverted; left silence %s to expire at %s",
+			d.Alert, silence, start.Add(window).UTC().Format(time.RFC3339))
+		say("%s", note)
+		obs.Notes = append(obs.Notes, note)
+	}
 	if obs.RevertFailed == "" {
 		if err := e.State.ClearActive(id); err != nil {
 			say("could not clear active record: %v", err)
