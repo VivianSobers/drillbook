@@ -169,7 +169,7 @@ Host faults are in the `drillbook.faults` Ansible collection under [ansible/coll
 | `drillbook plan <drill>` | Shows the fault, silence, waits and runbook blocks without running anything |
 | `drillbook lint [--rules glob]` | Validates drills and runbooks; with `--rules`, every alert rule must carry `runbook_url` |
 | `drillbook affected <git-range> [--max-fire-within 20m]` | Lists drills whose drill file, runbook or alert rule changed |
-| `drillbook abort` | Reverts faults and deletes silences left by interrupted drills |
+| `drillbook abort` | Reverts faults left by interrupted drills, and deletes their silences once the alert has cleared |
 | `drillbook list` | Lists drills with their alert, fault, schedule and last verdict |
 | `drillbook report` | Prints the latest result of each drill as a markdown table |
 
