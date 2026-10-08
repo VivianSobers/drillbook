@@ -1,7 +1,7 @@
 # drillbook design
 
 Date: 2026-10-08
-Status: draft, awaiting review
+Status: v0.1 built; see "Decisions made while building v0.1" at the end
 
 ## Summary
 
@@ -218,3 +218,21 @@ The LLM helps write and repair runbooks and never decides a verdict.
 - Does Runme tolerate the extra attribute keys?
 - Can the lab machines (worker-1 to worker-3, shared `ccbd` account) host drill VMs, or does everything beyond one small cluster go to AWS?
 - Which license: Apache-2.0, to match most Kubernetes tooling, is the default.
+
+## Decisions made while building v0.1
+
+The user asked for v0.1 to be built without them, on the laptop only (the lab GPU machines are for GPU work). These changes to the design above were made during the build:
+
+1. **Drill nodes are containers, not VMs.** There is no sudo and no libvirt on the laptop, so Terraform's Docker provider creates privileged systemd containers from a kind node image with sshd added. Ansible still provisions them over SSH and kubeadm still builds the cluster. Nodes share the host kernel and clock, so `skew_clock` and `expire_cert` are deferred to an environment with real VMs.
+2. **Results are JSON files, not SQLite.** `.drillbook/results.jsonl`, `active/`, `control-cache.json` and `snapshots/` keep the tool free of cgo.
+3. **Kubernetes faults joined Ansible faults.** Three of the five drills are bad deploys, so drills can scale or patch a Deployment. drillbook saves the Deployment's replicas and pod template first and restores them on revert.
+4. **Routing comes from Alertmanager itself.** drillbook reads the `receivers` field of `/api/v2/alerts` (including silenced alerts) instead of re-implementing the routing tree.
+5. **A ninth verdict, `revert-failed`,** ranks just below `aborted`. When drillbook cannot undo its own fault it says so and keeps the active record for `drillbook abort`.
+6. **Verdict precedence:** aborted, revert-failed, alert-did-not-fire, misrouted, step-failed, not-resolved, slower-than-runbook, inconclusive, pass. Every finding is still listed.
+7. **Drills can pick fix blocks** with `fixes: [name, ...]`, because one runbook often covers several causes and a drill injects one of them.
+8. **Time to resolve is measured from the first runbook block**, diagnosis included.
+9. **Role tests are Ansible playbooks** run by `tests/roles/run.sh` against a throwaway node container, not Molecule.
+10. **Revert timers set `AccuracySec=1s`.** systemd's default of one minute made a CI test fail when the timer fired late.
+11. **`host:<name>` runbook blocks are checked against `allow.hosts`**, the same as fault targets.
+12. **No operator in v0.1.** The CLI runs from CI or an operator's machine, where Ansible inventories and SSH access already live.
+
