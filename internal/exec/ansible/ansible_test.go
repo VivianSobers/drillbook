@@ -134,3 +134,22 @@ func TestHostIsRequired(t *testing.T) {
 		t.Fatal("empty host must be an error, not an implicit 'all'")
 	}
 }
+
+func TestRunBlockKillsAHungPlaybook(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "ansible-playbook")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexec sleep 30\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	r := runner(bin)
+	r.Grace = 200 * time.Millisecond
+	b := runbook.Block{Name: "hang", Script: "true\n", Timeout: 100 * time.Millisecond}
+	start := time.Now()
+	err := r.RunBlock(context.Background(), b, "worker", nil, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("a playbook that outlives timeout+grace must fail")
+	}
+	if time.Since(start) > 5*time.Second {
+		t.Fatalf("took %v; the runner must not wait for a hung ansible-playbook", time.Since(start))
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"sigs.k8s.io/yaml"
@@ -25,6 +26,9 @@ type Runner struct {
 	Playbook        string
 	Inventory       string
 	CollectionsPath string
+	// Grace is how long a block's ansible-playbook may run past the block's
+	// own timeout (SSH setup, fact handling) before it is killed. Default 2m.
+	Grace time.Duration
 }
 
 func New(cfg *config.Config) *Runner {
@@ -55,6 +59,12 @@ func (r *Runner) role(ctx context.Context, f drill.AnsibleFault, host, phase str
 
 // RunBlock runs one runbook block on host under bash strict mode.
 func (r *Runner) RunBlock(ctx context.Context, b runbook.Block, host string, env map[string]string, log io.Writer) error {
+	grace := r.Grace
+	if grace == 0 {
+		grace = 2 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(ctx, b.Timeout+grace)
+	defer cancel()
 	task := map[string]any{
 		"name":                  b.Name,
 		"ansible.builtin.shell": map[string]any{"cmd": "set -euo pipefail\n" + b.Script, "executable": "/bin/bash"},
@@ -96,6 +106,9 @@ func (r *Runner) run(ctx context.Context, host, name string, task map[string]any
 	}
 	cmd.Stdout = io.MultiWriter(log, &tail)
 	cmd.Stderr = cmd.Stdout
+	// Kill ansible-playbook and its ssh children together.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 	cmd.WaitDelay = 10 * time.Second
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s on %s: %w\n%s", name, host, err, lastLines(tail.String(), 15))
