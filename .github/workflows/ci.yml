@@ -61,7 +61,7 @@ jobs:
             | tar xz --strip-components=1 -C /usr/local/bin "prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool"
           curl -sSfL "https://github.com/cloudflare/pint/releases/download/v${PINT_VERSION}/pint-${PINT_VERSION}-linux-amd64.tar.gz" \
             | tar xz -C /tmp && sudo mv /tmp/pint-linux-amd64 /usr/local/bin/pint
-      - run: promtool check rules examples/shop/rules.yaml
-      - run: promtool test rules examples/shop/rules_test.yaml
-      - run: pint lint examples/shop/rules.yaml
-      - run: go run ./cmd/drillbook lint --rules examples/shop/rules.yaml
+      - run: promtool check rules examples/shop/rules.yaml deploy/prometheus/drillbook-alerts.yaml
+      - run: promtool test rules examples/shop/rules_test.yaml deploy/prometheus/drillbook-alerts_test.yaml
+      - run: pint lint examples/shop/rules.yaml deploy/prometheus/drillbook-alerts.yaml
+      - run: go run ./cmd/drillbook lint --rules examples/shop/rules.yaml --rules deploy/prometheus/drillbook-alerts.yaml
