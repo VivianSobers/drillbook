@@ -1,0 +1,48 @@
+rule_files:
+  - rules.yaml
+evaluation_interval: 15s
+tests:
+  - name: fires when every target is down
+    interval: 15s
+    input_series:
+      - series: 'up{job="shop-api", instance="a"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+      - series: 'up{job="shop-api", instance="b"}'
+        values: '1 1 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: ShopApiDown
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: ShopApiDown
+        exp_alerts:
+          - exp_labels: {service: shop-api, severity: critical, team: shop}
+            exp_annotations:
+              summary: shop-api has no healthy instance
+              description: No shop-api target has been up for a minute. Customers cannot place orders.
+              runbook_url: https://github.com/VivianSobers/drillbook/blob/main/examples/shop/runbooks/ShopApiDown.md
+  - name: fires when the targets disappear
+    interval: 15s
+    input_series:
+      - series: 'up{job="shop-api", instance="a"}'
+        values: '1 1 stale'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ShopApiDown
+        exp_alerts:
+          - exp_labels: {service: shop-api, severity: critical, team: shop}
+            exp_annotations:
+              summary: shop-api has no healthy instance
+              description: No shop-api target has been up for a minute. Customers cannot place orders.
+              runbook_url: https://github.com/VivianSobers/drillbook/blob/main/examples/shop/runbooks/ShopApiDown.md
+  - name: quiet while one target is up
+    interval: 15s
+    input_series:
+      - series: 'up{job="shop-api", instance="a"}'
+        values: '1 1 1 1 1 1 1 1 1 1'
+      - series: 'up{job="shop-api", instance="b"}'
+        values: '0 0 0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: ShopApiDown
+        exp_alerts: []

@@ -1,0 +1,72 @@
+# The shop demo service: a small HTTP API that exposes Prometheus metrics.
+# Drills break it the way bad deploys do.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: shop
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shop-api
+  namespace: shop
+  labels:
+    app: shop-api
+spec:
+  replicas: 2
+  # Short, so a stuck rollout is reported within two minutes instead of ten.
+  progressDeadlineSeconds: 120
+  selector:
+    matchLabels:
+      app: shop-api
+  template:
+    metadata:
+      labels:
+        app: shop-api
+    spec:
+      containers:
+        - name: api
+          image: quay.io/brancz/prometheus-example-app:v0.5.0
+          args: ["--bind=:8080"]
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shop-api
+  namespace: shop
+  labels:
+    app: shop-api
+spec:
+  selector:
+    app: shop-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+  selector:
+    matchLabels:
+      app: shop-api
+  endpoints:
+    - port: http
+      interval: 15s
