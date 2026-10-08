@@ -1,0 +1,35 @@
+# Alerts on drillbook's own metrics (written by `drillbook report --format
+# prometheus --output <textfile dir>/drillbook.prom`). A drill that quietly
+# stops running looks exactly like one that keeps passing, so freshness is
+# alerted on, not just failure.
+groups:
+  - name: drillbook
+    rules:
+      - alert: DrillbookDrillFailing
+        expr: drillbook_drill_passed == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drill {{ $labels.drill }} did not pass on its latest run"
+          description: "The latest run of {{ $labels.drill }} ({{ $labels.alert }}) did not pass. Its alert or runbook may not work."
+          runbook_url: https://github.com/VivianSobers/drillbook/blob/main/runbooks/drillbook/DrillbookDrillFailing.md
+      - alert: DrillbookDrillStale
+        # Weekly drills plus a day of slack.
+        expr: time() - drillbook_drill_last_success_timestamp_seconds > 8 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Drill {{ $labels.drill }} has not passed in over 8 days"
+          description: "{{ $labels.alert }} and its runbook are unverified: the last passing drill was {{ $value | humanizeDuration }} ago."
+          runbook_url: https://github.com/VivianSobers/drillbook/blob/main/runbooks/drillbook/DrillbookDrillStale.md
+      - alert: DrillbookMetricsMissing
+        expr: absent(drillbook_drill_last_run_timestamp_seconds)
+        for: 6h
+        labels:
+          severity: warning
+        annotations:
+          summary: No drillbook metrics
+          description: Either no drill has ever run, or `drillbook report --format prometheus` is not writing into the textfile collector directory.
+          runbook_url: https://github.com/VivianSobers/drillbook/blob/main/runbooks/drillbook/DrillbookMetricsMissing.md
