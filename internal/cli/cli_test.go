@@ -185,3 +185,25 @@ func TestReportWithoutResults(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestListShowsDrillsWithLastVerdict(t *testing.T) {
+	dir := fixture(t)
+	out, err := run(t, dir, "list")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "kubelet-stopped") || !strings.Contains(out, "KubeNodeNotReady") || !strings.Contains(out, "drillbook.faults.stop_service") || !strings.Contains(out, "never run") {
+		t.Fatalf("out = %q", out)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".drillbook"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"drill":"kubelet-stopped","id":"k-1","alert":"KubeNodeNotReady","verdict":"pass","started":"2026-10-08T15:00:00Z","fired_after":"16m0s","resolved_after":"1m0s","control_ran":true,"control_cleared":false,"log":"x"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, ".drillbook", "results.jsonl"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _ = run(t, dir, "list")
+	if !strings.Contains(out, "pass") || !strings.Contains(out, "2026-10-08 15:00") {
+		t.Fatalf("out = %q", out)
+	}
+}

@@ -50,7 +50,7 @@ func New(out io.Writer) *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&a.configPath, "config", "drillbook.yaml", "path to drillbook.yaml")
 	root.PersistentFlags().StringVar(&a.drillsDir, "drills", "", "drill directory (default: drills/ next to the config file)")
-	root.AddCommand(a.runCmd(), a.planCmd(), a.lintCmd(), a.affectedCmd(), a.abortCmd(), a.reportCmd(), a.versionCmd())
+	root.AddCommand(a.runCmd(), a.planCmd(), a.lintCmd(), a.affectedCmd(), a.abortCmd(), a.reportCmd(), a.listCmd(), a.versionCmd())
 	return root
 }
 
@@ -420,6 +420,50 @@ func (a *app) reportCmd() *cobra.Command {
 			}
 			fmt.Fprint(a.out, report.Markdown(rs))
 			return nil
+		},
+	}
+}
+
+func (a *app) listCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List drills with their alert, fault and last verdict",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := a.load(); err != nil {
+				return err
+			}
+			last := map[string]engine.Result{}
+			path := filepath.Join(a.cfg.StateDir, "results.jsonl")
+			if _, err := os.Stat(path); err == nil {
+				rs, err := report.Load(path)
+				if err != nil {
+					return err
+				}
+				for _, r := range rs {
+					last[r.Drill] = r
+				}
+			}
+			tw := tabwriter.NewWriter(a.out, 0, 0, 2, ' ', 0)
+			fmt.Fprintln(tw, "DRILL\tALERT\tFAULT\tSCHEDULE\tLAST VERDICT\tLAST RUN")
+			for _, d := range a.drills {
+				fault := "-"
+				switch {
+				case d.Fault.Ansible != nil:
+					fault = d.Fault.Ansible.Role
+				case d.Fault.Kube != nil:
+					fault = "kube " + d.Fault.Kube.Namespace + "/" + d.Fault.Kube.Deployment
+				}
+				verdict, when := "never run", "-"
+				if r, ok := last[d.Name]; ok {
+					verdict, when = string(r.Verdict), r.Started.UTC().Format("2006-01-02 15:04")
+				}
+				schedule := d.Schedule
+				if schedule == "" {
+					schedule = "-"
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", d.Name, d.Alert, fault, schedule, verdict, when)
+			}
+			return tw.Flush()
 		},
 	}
 }
