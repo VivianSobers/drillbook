@@ -1,0 +1,52 @@
+# Managed by Ansible (env/ansible/roles/kubeadm_init).
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ ansible_host }}
+  bindPort: 6443
+nodeRegistration:
+  criSocket: unix:///run/containerd/containerd.sock
+  kubeletExtraArgs:
+    - name: node-ip
+      value: {{ ansible_host }}
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: {{ kubeadm_init_kubernetes_version }}
+clusterName: {{ kubeadm_init_cluster_name }}
+controlPlaneEndpoint: {{ ansible_host }}:6443
+networking:
+  podSubnet: {{ kubeadm_init_pod_subnet }}
+  serviceSubnet: {{ kubeadm_init_service_subnet }}
+apiServer:
+  certSANs: [localhost, 127.0.0.1, {{ ansible_host }}]
+controllerManager:
+  extraArgs:
+    - name: bind-address
+      value: 0.0.0.0
+scheduler:
+  extraArgs:
+    - name: bind-address
+      value: 0.0.0.0
+etcd:
+  local:
+    extraArgs:
+      - name: listen-metrics-urls
+        value: http://0.0.0.0:2381
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+failSwapOn: false
+# The nodes share the laptop's disk; never evict pods because the host disk is busy.
+imageGCHighThresholdPercent: 100
+evictionHard:
+  nodefs.available: "0%"
+  nodefs.inodesFree: "0%"
+  imagefs.available: "0%"
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+metricsBindAddress: 0.0.0.0:10249
+conntrack:
+  maxPerCore: 0

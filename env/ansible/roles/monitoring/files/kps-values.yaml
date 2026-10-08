@@ -1,0 +1,61 @@
+# kube-prometheus-stack values for the drill environment.
+grafana:
+  enabled: false
+prometheus:
+  service:
+    type: NodePort
+    nodePort: 30090
+  prometheusSpec:
+    retention: 2d
+    evaluationInterval: 30s
+    scrapeInterval: 30s
+    resources:
+      requests:
+        memory: 400Mi
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+alertmanager:
+  service:
+    type: NodePort
+    nodePort: 30093
+  config:
+    global:
+      resolve_timeout: 5m
+    route:
+      receiver: platform-oncall
+      group_by: [alertname, namespace]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        - receiver: "null"
+          matchers: ['alertname = "Watchdog"']
+        - receiver: "null"
+          matchers: ['alertname = "InfoInhibitor"']
+        - receiver: shop-team
+          matchers: ['team = "shop"']
+        - receiver: shop-team
+          matchers: ['namespace = "shop"']
+    inhibit_rules:
+      - source_matchers: ['severity = "critical"']
+        target_matchers: ['severity =~ "warning|info"']
+        equal: [namespace, alertname]
+      - source_matchers: ['severity = "warning"']
+        target_matchers: ['severity = "info"']
+        equal: [namespace, alertname]
+    # Webhooks point at a closed port: the drill environment has nobody to page,
+    # but the routing tree is real, so drills can check where alerts would go.
+    receivers:
+      - name: "null"
+      - name: platform-oncall
+        webhook_configs:
+          - url: http://127.0.0.1:9/platform-oncall
+            send_resolved: true
+      - name: shop-team
+        webhook_configs:
+          - url: http://127.0.0.1:9/shop-team
+            send_resolved: true
+kubeEtcd:
+  service:
+    targetPort: 2381

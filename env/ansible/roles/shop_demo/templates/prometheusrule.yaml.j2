@@ -1,0 +1,8 @@
+# Generated from examples/shop/rules.yaml by env/ansible/roles/shop_demo.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: shop-api
+  namespace: shop
+spec:
+{{ lookup('ansible.builtin.file', drillbook_repo_root ~ '/examples/shop/rules.yaml') | indent(2, true) }}

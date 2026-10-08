@@ -1,0 +1,5 @@
+---
+- name: Join the cluster
+  ansible.builtin.command:
+    cmd: "{{ hostvars[groups['control_plane'][0]]['kubeadm_init_join_command'] }} --skip-phases=preflight"
+    creates: /etc/kubernetes/kubelet.conf

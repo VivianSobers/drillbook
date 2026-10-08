@@ -1,0 +1,51 @@
+---
+- name: Wait for every node to be Ready
+  ansible.builtin.command:
+    argv: [kubectl, wait, --for=condition=Ready, nodes, --all, --timeout=300s]
+  environment:
+    KUBECONFIG: "{{ drillbook_kubeconfig }}"
+  changed_when: false
+
+- name: Add the prometheus-community chart repository
+  ansible.builtin.command:
+    argv: [helm, repo, add, --force-update, prometheus-community, https://prometheus-community.github.io/helm-charts]
+  changed_when: false
+
+- name: Install kube-prometheus-stack
+  ansible.builtin.command:
+    argv:
+      - helm
+      - upgrade
+      - --install
+      - kps
+      - prometheus-community/kube-prometheus-stack
+      - --version
+      - "{{ monitoring_chart_version }}"
+      - --namespace
+      - "{{ monitoring_namespace }}"
+      - --create-namespace
+      - --values
+      - "{{ role_path }}/files/kps-values.yaml"
+      - --wait
+      - --timeout
+      - 15m
+  environment:
+    KUBECONFIG: "{{ drillbook_kubeconfig }}"
+  register: monitoring_helm
+  changed_when: "'STATUS: deployed' in monitoring_helm.stdout"
+
+- name: Wait for Prometheus to be ready
+  ansible.builtin.uri:
+    url: "http://{{ drillbook_control_plane_ip }}:30090/-/ready"
+  register: monitoring_ready
+  until: monitoring_ready.status == 200
+  retries: 60
+  delay: 5
+
+- name: Wait for Alertmanager to be ready
+  ansible.builtin.uri:
+    url: "http://{{ drillbook_control_plane_ip }}:30093/-/ready"
+  register: monitoring_am_ready
+  until: monitoring_am_ready.status == 200
+  retries: 60
+  delay: 5

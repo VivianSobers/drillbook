@@ -1,0 +1,35 @@
+---
+# Builds the drill cluster on the nodes Terraform created:
+# kubeadm control plane and workers, kube-prometheus-stack, and the shop demo app.
+- name: Wait for every node
+  hosts: cluster
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 120
+    - name: Wait for systemd to finish booting
+      ansible.builtin.command: systemctl is-system-running --wait  # noqa: command-instead-of-module
+      register: drillbook_boot
+      changed_when: false
+      failed_when: drillbook_boot.stdout not in ['running', 'degraded']
+
+- name: Control plane
+  hosts: control_plane
+  gather_facts: false
+  roles:
+    - kubeadm_init
+
+- name: Workers
+  hosts: workers
+  gather_facts: false
+  roles:
+    - kubeadm_join
+
+- name: Cluster add-ons
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  roles:
+    - monitoring
+    - shop_demo

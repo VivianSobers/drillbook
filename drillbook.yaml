@@ -1,0 +1,14 @@
+# drillbook configuration for the local drill environment built by env/up.sh.
+prometheus: http://172.31.250.10:30090
+alertmanager: http://172.31.250.10:30093
+kubeconfig: env/.generated/kubeconfig
+inventory: env/.generated/inventory.ini
+ansible:
+  playbook: ansible-playbook
+  collections_path: ansible/collections
+state_dir: .drillbook
+poll_interval: 15s
+silence_creator: drillbook
+allow:
+  hosts: [drillbook-worker]
+  namespaces: [shop]

@@ -1,0 +1,43 @@
+---
+- name: Write the kubeadm configuration
+  ansible.builtin.template:
+    src: kubeadm.yaml.j2
+    dest: /etc/kubernetes/drillbook-kubeadm.yaml
+    mode: "0600"
+
+- name: Initialise the control plane
+  ansible.builtin.command:
+    argv: [kubeadm, init, --config, /etc/kubernetes/drillbook-kubeadm.yaml, --skip-phases=preflight]
+    creates: /etc/kubernetes/admin.conf
+
+- name: Install the pod network (kindnet, shipped in the node image)
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    sed 's#{{ '{{' }} .PodSubnet {{ '}}' }}#{{ kubeadm_init_pod_subnet }}#' /kind/manifests/default-cni.yaml
+    | kubectl --kubeconfig /etc/kubernetes/admin.conf apply -f -
+  args:
+    executable: /bin/bash
+  register: kubeadm_init_cni
+  changed_when: "'created' in kubeadm_init_cni.stdout or 'configured' in kubeadm_init_cni.stdout"
+
+- name: Install the local-path storage class
+  ansible.builtin.command:
+    argv: [kubectl, --kubeconfig, /etc/kubernetes/admin.conf, apply, -f, /kind/manifests/default-storage.yaml]
+  register: kubeadm_init_storage
+  changed_when: "'created' in kubeadm_init_storage.stdout or 'configured' in kubeadm_init_storage.stdout"
+
+- name: Copy the admin kubeconfig to the runner
+  ansible.builtin.fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ drillbook_kubeconfig }}"
+    flat: true
+
+- name: Create a join command for workers
+  ansible.builtin.command:
+    argv: [kubeadm, token, create, --print-join-command, --ttl, 30m]
+  register: kubeadm_init_join
+  changed_when: true
+
+- name: Share the join command
+  ansible.builtin.set_fact:
+    kubeadm_init_join_command: "{{ kubeadm_init_join.stdout }}"

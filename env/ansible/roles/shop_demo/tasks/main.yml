@@ -1,0 +1,29 @@
+---
+- name: Deploy the shop demo app
+  ansible.builtin.command:
+    argv: [kubectl, apply, -f, "{{ drillbook_repo_root }}/examples/shop/shop-api.yaml"]
+  environment:
+    KUBECONFIG: "{{ drillbook_kubeconfig }}"
+  register: shop_demo_apply
+  changed_when: "'created' in shop_demo_apply.stdout or 'configured' in shop_demo_apply.stdout"
+
+- name: Render the shop alert rules
+  ansible.builtin.template:
+    src: prometheusrule.yaml.j2
+    dest: "{{ drillbook_generated_dir }}/shop-prometheusrule.yaml"
+    mode: "0644"
+
+- name: Apply the shop alert rules
+  ansible.builtin.command:
+    argv: [kubectl, apply, -f, "{{ drillbook_generated_dir }}/shop-prometheusrule.yaml"]
+  environment:
+    KUBECONFIG: "{{ drillbook_kubeconfig }}"
+  register: shop_demo_rules
+  changed_when: "'created' in shop_demo_rules.stdout or 'configured' in shop_demo_rules.stdout"
+
+- name: Wait for the shop rollout
+  ansible.builtin.command:
+    argv: [kubectl, -n, shop, rollout, status, deployment/shop-api, --timeout=300s]
+  environment:
+    KUBECONFIG: "{{ drillbook_kubeconfig }}"
+  changed_when: false

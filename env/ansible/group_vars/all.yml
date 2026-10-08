@@ -1,0 +1,5 @@
+---
+drillbook_repo_root: "{{ playbook_dir }}/../.."
+drillbook_generated_dir: "{{ lookup('env', 'DRILLBOOK_GENERATED_DIR') | default(playbook_dir ~ '/../.generated', true) }}"
+drillbook_kubeconfig: "{{ drillbook_generated_dir }}/kubeconfig"
+drillbook_control_plane_ip: "{{ hostvars[groups['control_plane'][0]]['ansible_host'] }}"
