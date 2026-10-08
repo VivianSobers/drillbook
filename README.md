@@ -1,5 +1,33 @@
 # drillbook
 
-drillbook runs fire drills on Prometheus alerts and the runbooks they link to. A drill breaks something on purpose, checks that the right alert fires, runs the fix written in the runbook, and checks that the alert clears. If any step fails, it opens an issue.
+drillbook runs fire drills on Prometheus alerts and the runbooks they link to. A drill breaks something on purpose, checks that the right alert fires and reaches the right receiver, runs the fix written in the runbook, and checks that the alert clears. Then it breaks the same thing again without the runbook, to make sure the alert did not just clear on its own.
 
-Status: design stage. See [the design spec](docs/superpowers/specs/2026-10-08-drillbook-design.md).
+The runbook file is the test. drillbook runs the commands tagged inside the runbook itself, so when someone edits the runbook, or the system changes under it, the next drill finds out.
+
+This is a real run against the drill environment in this repository:
+
+```
+$ drillbook run shop-api-scaled-to-zero
+[13:50:40] shop-api-scaled-to-zero: silenced ShopApiDown for this target (silence 17738e84-8d87-4355-b1e1-bea9bc867902)
+[13:50:40] shop-api-scaled-to-zero: applying fault
+[13:50:40] shop-api-scaled-to-zero: waiting up to 4m0s for ShopApiDown to fire
+[13:52:25] shop-api-scaled-to-zero: ShopApiDown fired after 1m45s
+[13:52:25] shop-api-scaled-to-zero: alertmanager receivers: [shop-team]
+[13:52:25] shop-api-scaled-to-zero: running check block deployment (target runner)
+[13:52:25] shop-api-scaled-to-zero: running check block pods (target runner)
+[13:52:25] shop-api-scaled-to-zero: running check block events (target runner)
+[13:52:25] shop-api-scaled-to-zero: running fix block scale-up (target runner)
+[13:52:26] shop-api-scaled-to-zero: waiting up to 4m0s for ShopApiDown to clear
+[13:52:56] shop-api-scaled-to-zero: ShopApiDown cleared 31s after the runbook started
+[13:52:56] shop-api-scaled-to-zero: reverting fault
+[13:52:56] shop-api-scaled-to-zero: control run: re-applying the fault without the runbook
+[13:58:56] shop-api-scaled-to-zero: control run: cleared without runbook = false
+[13:58:56] shop-api-scaled-to-zero: control run: reverting fault
+[13:58:56] shop-api-scaled-to-zero: verdict: pass
+```
+
+## Why
+
+Alerts and runbooks fail quietly. A rule can reference a metric that an exporter renamed, so it never fires. An alert can fire and route to nobody. A runbook can name a flag or a namespace that no longer exists, and nobody notices until someone follows it during an incident.
+
+Existing tools check parts of this. `promtool test rules` checks rule logic against made-up series, `pint` checks rules against a live Prometheus, and chaos tools such as LitmusChaos and Krkn inject faults and can query Prometheus while they do. None of them run the runbook and check that it clears the alert. drillbook does that, and uses promtool and pint for the parts they already cover.
