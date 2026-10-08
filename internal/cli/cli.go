@@ -23,6 +23,7 @@ import (
 	"github.com/VivianSobers/drillbook/internal/engine"
 	"github.com/VivianSobers/drillbook/internal/lint"
 	"github.com/VivianSobers/drillbook/internal/prom"
+	"github.com/VivianSobers/drillbook/internal/report"
 	"github.com/VivianSobers/drillbook/internal/runbook"
 	"github.com/VivianSobers/drillbook/internal/state"
 	"github.com/VivianSobers/drillbook/internal/wire"
@@ -49,7 +50,7 @@ func New(out io.Writer) *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&a.configPath, "config", "drillbook.yaml", "path to drillbook.yaml")
 	root.PersistentFlags().StringVar(&a.drillsDir, "drills", "", "drill directory (default: drills/ next to the config file)")
-	root.AddCommand(a.runCmd(), a.planCmd(), a.lintCmd(), a.affectedCmd(), a.abortCmd(), a.versionCmd())
+	root.AddCommand(a.runCmd(), a.planCmd(), a.lintCmd(), a.affectedCmd(), a.abortCmd(), a.reportCmd(), a.versionCmd())
 	return root
 }
 
@@ -395,6 +396,29 @@ func (a *app) abortCmd() *cobra.Command {
 			if failed > 0 {
 				return fmt.Errorf("%d of %d active drills could not be reverted", failed, len(active))
 			}
+			return nil
+		},
+	}
+}
+
+func (a *app) reportCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "report",
+		Short: "Print the latest result of each drill as a markdown table",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load(a.configPath)
+			if err != nil {
+				return err
+			}
+			path := filepath.Join(cfg.StateDir, "results.jsonl")
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				return fmt.Errorf("no results yet: %s does not exist; run a drill first", path)
+			}
+			rs, err := report.Load(path)
+			if err != nil {
+				return err
+			}
+			fmt.Fprint(a.out, report.Markdown(rs))
 			return nil
 		},
 	}

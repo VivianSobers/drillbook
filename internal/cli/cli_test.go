@@ -160,3 +160,28 @@ func TestAbortWithNothingActive(t *testing.T) {
 		t.Fatalf("err %v out %q", err, out)
 	}
 }
+
+func TestReportPrintsLatestResults(t *testing.T) {
+	dir := fixture(t)
+	if err := os.MkdirAll(filepath.Join(dir, ".drillbook"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"drill":"kubelet-stopped","id":"k-1","alert":"KubeNodeNotReady","verdict":"pass","fired_after":"16m0s","resolved_after":"1m0s","receivers":["platform-oncall"],"control_ran":true,"control_cleared":false,"log":"x"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, ".drillbook", "results.jsonl"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := run(t, dir, "report")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if !strings.Contains(out, "| kubelet-stopped | KubeNodeNotReady | pass | 16m0s | 1m0s | platform-oncall | held |") {
+		t.Errorf("out = %q", out)
+	}
+}
+
+func TestReportWithoutResults(t *testing.T) {
+	dir := fixture(t)
+	if _, err := run(t, dir, "report"); err == nil || !strings.Contains(err.Error(), "no results yet") {
+		t.Fatalf("err = %v", err)
+	}
+}
