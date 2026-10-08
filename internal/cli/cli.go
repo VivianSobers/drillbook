@@ -402,9 +402,10 @@ func (a *app) abortCmd() *cobra.Command {
 }
 
 func (a *app) reportCmd() *cobra.Command {
-	return &cobra.Command{
+	var format, output string
+	c := &cobra.Command{
 		Use:   "report",
-		Short: "Print the latest result of each drill as a markdown table",
+		Short: "Print drill results as a markdown table or as Prometheus metrics",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(a.configPath)
 			if err != nil {
@@ -414,14 +415,45 @@ func (a *app) reportCmd() *cobra.Command {
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return fmt.Errorf("no results yet: %s does not exist; run a drill first", path)
 			}
-			rs, err := report.Load(path)
+			all, err := report.LoadAll(path)
 			if err != nil {
 				return err
 			}
-			fmt.Fprint(a.out, report.Markdown(rs))
-			return nil
+			var text string
+			switch format {
+			case "markdown":
+				rs, err := report.Load(path)
+				if err != nil {
+					return err
+				}
+				text = report.Markdown(rs)
+			case "prometheus":
+				text = report.Prometheus(all)
+			default:
+				return fmt.Errorf("unknown format %q; use markdown or prometheus", format)
+			}
+			if output == "" {
+				fmt.Fprint(a.out, text)
+				return nil
+			}
+			return writeAtomic(output, text)
 		},
 	}
+	c.Flags().StringVar(&format, "format", "markdown", "markdown or prometheus")
+	c.Flags().StringVar(&output, "output", "", "write to this file instead of stdout (atomically, for the node_exporter textfile collector)")
+	return c
+}
+
+// writeAtomic writes via a temp file and rename, so a collector never reads half a file.
+func writeAtomic(path, text string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(text), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 func (a *app) listCmd() *cobra.Command {

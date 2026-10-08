@@ -207,3 +207,28 @@ func TestListShowsDrillsWithLastVerdict(t *testing.T) {
 		t.Fatalf("out = %q", out)
 	}
 }
+
+func TestReportPrometheusToFile(t *testing.T) {
+	dir := fixture(t)
+	if err := os.MkdirAll(filepath.Join(dir, ".drillbook"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"drill":"kubelet-stopped","id":"k-1","alert":"KubeNodeNotReady","verdict":"pass","started":"2026-10-08T12:00:00Z","fired_after":"16m0s","resolved_after":"1m0s","control_ran":true,"control_cleared":false,"log":"x"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, ".drillbook", "results.jsonl"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outFile := filepath.Join(dir, "textfile", "drillbook.prom")
+	if out, err := run(t, dir, "report", "--format", "prometheus", "--output", outFile); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	b, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `drillbook_drill_last_success_timestamp_seconds{alert="KubeNodeNotReady",drill="kubelet-stopped"} 1791460800`) {
+		t.Errorf("file = %s", b)
+	}
+	if _, err := run(t, dir, "report", "--format", "xml"); err == nil {
+		t.Error("unknown format must fail")
+	}
+}
