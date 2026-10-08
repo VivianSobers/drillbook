@@ -39,4 +39,4 @@ Bad: `update code`, `fix stuff`, `wip`
 
 ## Results
 
-Never write a drill result into a document by hand. Copy it from `.drillbook/results.jsonl` with `scripts/results-md.py`, and name the commit the run used.
+Never write a drill result into a document by hand. Copy it from `.drillbook/results.jsonl` with `drillbook report`, and name the commit the run used.
