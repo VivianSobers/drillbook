@@ -71,6 +71,16 @@ bin/drillbook run shop-api-scaled-to-zero
 env/down.sh                        # remove the environment
 ```
 
+### In a container
+
+Releases publish an image with drillbook, bash, kubectl and ansible-core:
+
+```sh
+docker run --rm --network host -v "$PWD:/work" ghcr.io/viviansobers/drillbook:v0.1.0 lint
+```
+
+Mount the directory that holds `drillbook.yaml`, the drills and the runbooks at `/work`, along with the kubeconfig and SSH key it names.
+
 ## Writing a runbook
 
 Runbooks stay ordinary markdown for people. drillbook only reads fenced code blocks that carry a `drill` attribute, written in [Runme](https://runme.dev)'s attribute syntax so the same file stays runnable in Runme:
