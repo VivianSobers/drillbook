@@ -540,3 +540,14 @@ func TestPreflightWaitsForALeftoverAlertToClear(t *testing.T) {
 		t.Fatalf("a leftover alert that clears within resolve_within must not abort the drill: %s %v", r.Verdict, r.Findings)
 	}
 }
+
+func TestPrometheusErrorsDuringWaitAreLogged(t *testing.T) {
+	w, e, _ := setup(t)
+	var out bytes.Buffer
+	e.Out = &out
+	w.promDownAfterApply = true
+	e.Run(context.Background(), testDrill(t), testRunbook(), RunOptions{})
+	if n := strings.Count(out.String(), "cannot query prometheus"); n != 1 {
+		t.Fatalf("want the first query error logged once, got %d:\n%s", n, out.String())
+	}
+}

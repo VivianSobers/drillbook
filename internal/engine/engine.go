@@ -115,6 +115,7 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 			_, _ = io.WriteString(e.Out, line)
 		}
 	}
+	health := &promHealth{say: say}
 	abort := func(reason string) Result {
 		say("aborted: %s", reason)
 		return e.finish(res, Observations{Aborted: true, AbortReason: reason})
@@ -136,7 +137,7 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 		// Often left over from an earlier drill in the same batch; give it
 		// resolve_within to clear before giving up.
 		say("%s is already firing for this target; waiting up to %v for it to clear", d.Alert, d.ResolveWithin.Duration)
-		firing, err = e.waitFor(ctx, d, false, d.ResolveWithin.Duration)
+		firing, err = e.waitFor(ctx, d, false, d.ResolveWithin.Duration, health)
 		if err != nil {
 			return abort("preflight: " + interrupted(err))
 		}
@@ -156,13 +157,13 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 		return abort("state: " + err.Error())
 	}
 
-	obs = e.drive(ctx, d, append(rb.Checks(), fixes...), opts, id, obs, &res, logw, say)
+	obs = e.drive(ctx, d, append(rb.Checks(), fixes...), opts, id, obs, &res, logw, say, health)
 
 	// Deleting the silence while the alert still fires would page someone, so
 	// wait for it to clear after the revert. If it does not, leave the silence
 	// to expire on its own.
 	say("waiting up to %v for %s to clear before removing the silence", d.ResolveWithin.Duration, d.Alert)
-	still, err := e.waitFor(context.WithoutCancel(ctx), d, false, d.ResolveWithin.Duration)
+	still, err := e.waitFor(context.WithoutCancel(ctx), d, false, d.ResolveWithin.Duration, health)
 	if err == nil && !still {
 		e.deleteSilence(silence, say)
 	} else {
@@ -185,7 +186,7 @@ func (e *Engine) Run(ctx context.Context, d *drill.Drill, rb *runbook.Runbook, o
 
 // drive applies the fault and observes the drill. It always reverts the fault
 // before returning and reports a failed revert in the observations.
-func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Block, opts RunOptions, id string, obs Observations, res *Result, logw io.Writer, say func(string, ...any)) (out Observations) {
+func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Block, opts RunOptions, id string, obs Observations, res *Result, logw io.Writer, say func(string, ...any), health *promHealth) (out Observations) {
 	cleanCtx := context.WithoutCancel(ctx)
 	reverted := false
 	revert := func() {
@@ -212,7 +213,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 	faultAt := e.Clock.Now()
 
 	say("waiting up to %v for %s to fire", d.FireWithin.Duration, d.Alert)
-	fired, err := e.waitFor(ctx, d, true, d.FireWithin.Duration)
+	fired, err := e.waitFor(ctx, d, true, d.FireWithin.Duration, health)
 	if err != nil {
 		return aborted(interrupted(err))
 	}
@@ -246,7 +247,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 	}
 	if obs.FailedStep == "" {
 		say("waiting up to %v for %s to clear", d.ResolveWithin.Duration, d.Alert)
-		stillFiring, err := e.waitFor(ctx, d, false, d.ResolveWithin.Duration)
+		stillFiring, err := e.waitFor(ctx, d, false, d.ResolveWithin.Duration, health)
 		if err != nil {
 			return aborted(interrupted(err))
 		}
@@ -269,7 +270,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 			say("control run cached: cleared without runbook = %v", cleared)
 			return out
 		}
-		ran, cleared, rerr, err := e.control(ctx, d, id+"-control", logw, say)
+		ran, cleared, rerr, err := e.control(ctx, d, id+"-control", logw, say, health)
 		if rerr != nil {
 			out.RevertFailed = rerr.Error()
 		}
@@ -290,7 +291,7 @@ func (e *Engine) drive(ctx context.Context, d *drill.Drill, steps []runbook.Bloc
 
 // control re-applies the fault without running the runbook and reports
 // whether the alert cleared on its own.
-func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io.Writer, say func(string, ...any)) (ran, cleared bool, revertErr, err error) {
+func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io.Writer, say func(string, ...any), health *promHealth) (ran, cleared bool, revertErr, err error) {
 	cleanCtx := context.WithoutCancel(ctx)
 	say("control run: re-applying the fault without the runbook")
 	if err := e.State.MarkActive(state.Active{ID: id, DrillFile: d.File, Started: e.Clock.Now()}); err != nil {
@@ -308,14 +309,14 @@ func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io
 		say("control run: apply failed: %v", err)
 		return false, false, nil, nil
 	}
-	fired, err := e.waitFor(ctx, d, true, d.FireWithin.Duration)
+	fired, err := e.waitFor(ctx, d, true, d.FireWithin.Duration, health)
 	if err != nil || !fired {
 		if err == nil {
 			say("control run: alert did not fire again; no control result")
 		}
 		return false, false, nil, err
 	}
-	still, err := e.waitFor(ctx, d, false, d.ResolveWithin.Duration)
+	still, err := e.waitFor(ctx, d, false, d.ResolveWithin.Duration, health)
 	if err != nil {
 		return false, false, nil, err
 	}
@@ -327,10 +328,11 @@ func (e *Engine) control(ctx context.Context, d *drill.Drill, id string, logw io
 // It returns the last observed state. If Prometheus could not be asked at the
 // deadline it returns an error instead: an unreachable Prometheus says nothing
 // about the alert.
-func (e *Engine) waitFor(ctx context.Context, d *drill.Drill, want bool, within time.Duration) (bool, error) {
+func (e *Engine) waitFor(ctx context.Context, d *drill.Drill, want bool, within time.Duration, h *promHealth) (bool, error) {
 	deadline := e.Clock.Now().Add(within)
 	for {
 		firing, err := e.Prom.Firing(ctx, d.Alert, d.Target.Labels)
+		h.observe(err)
 		if err == nil && firing == want {
 			return firing, nil
 		}
@@ -343,6 +345,27 @@ func (e *Engine) waitFor(ctx context.Context, d *drill.Drill, want bool, within 
 		if err := e.Clock.Sleep(ctx, e.Poll); err != nil {
 			return false, err
 		}
+	}
+}
+
+// promHealth logs when Prometheus stops and starts answering during a drill,
+// once per change, so a long wait does not hide an outage.
+type promHealth struct {
+	say  func(string, ...any)
+	down bool
+}
+
+func (h *promHealth) observe(err error) {
+	if h == nil {
+		return
+	}
+	switch {
+	case err != nil && !h.down:
+		h.down = true
+		h.say("cannot query prometheus: %v", err)
+	case err == nil && h.down:
+		h.down = false
+		h.say("prometheus is answering again")
 	}
 }
 
