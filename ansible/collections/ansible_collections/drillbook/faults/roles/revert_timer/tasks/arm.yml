@@ -28,6 +28,8 @@
   vars:
     revert_timer_args:
       - "--on-active={{ drillbook_revert_after | int }}s"
+      # Transient timers default to AccuracySec=1min and may fire up to a minute late.
+      - "--timer-property=AccuracySec=1s"
       - "--unit={{ revert_timer_unit }}"
       - "--description=drillbook revert for {{ drillbook_drill_id }}"
   changed_when: true
