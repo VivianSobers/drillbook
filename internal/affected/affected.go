@@ -71,7 +71,7 @@ func gitOut(dir string, args ...string) (string, error) {
 	cmd.Dir = dir
 	b, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(b)))
+		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(b)))
 	}
 	return string(b), nil
 }

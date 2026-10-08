@@ -4,6 +4,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -352,7 +353,7 @@ func (e *Engine) finish(res Result, obs Observations) Result {
 }
 
 func interrupted(err error) string {
-	if err == context.Canceled || err == context.DeadlineExceeded {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return "interrupted"
 	}
 	return err.Error()

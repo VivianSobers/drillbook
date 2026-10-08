@@ -65,17 +65,19 @@ func (s *Store) AppendResult(r any) error {
 	if err := os.MkdirAll(s.Dir, 0o755); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(s.Dir, "results.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 	b, err := json.Marshal(r)
 	if err != nil {
 		return err
 	}
-	_, err = f.Write(append(b, '\n'))
-	return err
+	f, err := os.OpenFile(filepath.Join(s.Dir, "results.jsonl"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(append(b, '\n')); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 func (s *Store) controlPath() string { return filepath.Join(s.Dir, "control-cache.json") }

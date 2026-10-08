@@ -1,0 +1,25 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gocritic
+    - misspell
+    - unconvert
+  settings:
+    errcheck:
+      # Progress output and read-side closes: nothing useful to do on failure.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.ReadCloser).Close
+        - (io.WriteCloser).Close
+        - (*text/tabwriter.Writer).Flush
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [errcheck]
+formatters:
+  enable:
+    - gofmt

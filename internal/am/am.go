@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -59,7 +60,8 @@ func (c *Client) CreateSilence(ctx context.Context, alert string, labels map[str
 // DeleteSilence expires a silence. A silence that is already gone is not an error.
 func (c *Client) DeleteSilence(ctx context.Context, id string) error {
 	err := c.do(ctx, http.MethodDelete, "/api/v2/silence/"+url.PathEscape(id), nil, nil)
-	if he, ok := err.(httpError); ok && he.code == http.StatusNotFound {
+	var he httpError
+	if errors.As(err, &he) && he.code == http.StatusNotFound {
 		return nil
 	}
 	if err != nil {
