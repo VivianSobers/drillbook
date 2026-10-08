@@ -1,0 +1,27 @@
+# A release points at an image tag that was never pushed, so the rollout
+# stalls. KubeDeploymentRolloutStuck should fire for the shop team; rolling
+# back fixes it.
+alert: KubeDeploymentRolloutStuck
+runbook: ../runbooks/kubernetes/KubeDeploymentRolloutStuck.md
+target:
+  labels: {namespace: shop, deployment: shop-api}
+  env: {NAMESPACE: shop, DEPLOYMENT: shop-api}
+fault:
+  kube:
+    namespace: shop
+    deployment: shop-api
+    patch:
+      type: strategic
+      body:
+        spec:
+          template:
+            spec:
+              containers:
+                - name: api
+                  image: quay.io/brancz/prometheus-example-app:v0.0.0-never-pushed
+fire_within: 25m
+resolve_within: 5m
+expected_resolve: 3m
+expect:
+  receiver: shop-team
+schedule: weekly
