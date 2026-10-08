@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -16,6 +17,9 @@ import (
 
 	"github.com/VivianSobers/drillbook/internal/config"
 )
+
+// namePattern keeps drill names usable in systemd unit names, file names and labels.
+var namePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // RevertMargin is the minimum slack between the end of a drill's waits and the
 // host-side revert timer, so the timer never undoes the fault mid-drill.
@@ -131,6 +135,9 @@ func (d *Drill) Validate(cfg *config.Config) []error {
 		errs = append(errs, fmt.Errorf("%s: "+format, append([]any{d.Name}, a...)...))
 	}
 
+	if !namePattern.MatchString(d.Name) {
+		add("name %q must be lowercase letters, digits and dashes (it names the host revert timer)", d.Name)
+	}
 	if d.Alert == "" {
 		add("alert is required")
 	}

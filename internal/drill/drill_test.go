@@ -148,6 +148,8 @@ func TestValidateRejects(t *testing.T) {
 		{"kube scale and patch", strings.Replace(validKube, "    scale: 0\n", "    scale: 0\n    patch: {type: merge, body: {}}\n", 1), "exactly one of fault.kube.scale or fault.kube.patch"},
 		{"bad patch type", strings.Replace(validKube, "    scale: 0\n", "    patch: {type: yaml, body: {}}\n", 1), `patch.type "yaml" must be json, merge or strategic`},
 		{"no deployment", strings.Replace(validKube, "    deployment: shop-api\n", "", 1), "fault.kube.deployment is required"},
+		{"name with spaces", "name: disk full\n" + validKube, `name "disk full" must be lowercase letters, digits and dashes`},
+		{"name with slash", "name: a/b\n" + validKube, `name "a/b" must be`},
 		{"no labels", strings.Replace(validKube, "  labels: {job: shop-api}\n", "  {}\n", 1), "target.labels must name at least one label"},
 	}
 	for _, c := range cases {
