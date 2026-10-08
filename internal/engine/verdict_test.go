@@ -38,7 +38,11 @@ func TestDecide(t *testing.T) {
 		{"alert did not fire", func(o *Observations) { *o = Observations{Fired: false} }, AlertDidNotFire, "did not fire"},
 		{"misrouted", func(o *Observations) { o.Receivers = []string{"null"} }, Misrouted, `expected receiver "platform-oncall", got [null]`},
 		{"never reached alertmanager", func(o *Observations) { o.Receivers = nil }, Misrouted, "got []"},
-		{"step failed", func(o *Observations) { o.FailedStep = "restart: exit status 1"; o.Resolved = false; o.ControlRan = false }, StepFailed, "restart: exit status 1"},
+		{"step failed", func(o *Observations) {
+			o.FailedStep = "restart: exit status 1"
+			o.Resolved = false
+			o.ControlRan = false
+		}, StepFailed, "restart: exit status 1"},
 		{"not resolved", func(o *Observations) { o.Resolved = false; o.ControlRan = false }, NotResolved, "still firing"},
 		{"slower than runbook", func(o *Observations) { o.ResolvedAfter = 9 * time.Minute }, SlowerThanRunbook, "9m0s, runbook says 5m0s"},
 		{"inconclusive", func(o *Observations) { o.ControlCleared = true }, Inconclusive, "cleared without the runbook"},

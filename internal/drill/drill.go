@@ -125,7 +125,9 @@ func LoadDir(dir string) ([]*Drill, error) {
 // Validate returns every problem with the drill against cfg's allowlist.
 func (d *Drill) Validate(cfg *config.Config) []error {
 	var errs []error
-	add := func(format string, a ...any) { errs = append(errs, fmt.Errorf("%s: "+format, append([]any{d.Name}, a...)...)) }
+	add := func(format string, a ...any) {
+		errs = append(errs, fmt.Errorf("%s: "+format, append([]any{d.Name}, a...)...))
+	}
 
 	if d.Alert == "" {
 		add("alert is required")
