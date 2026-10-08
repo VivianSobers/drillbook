@@ -1,0 +1,59 @@
+rule_files:
+  - drillbook-alerts.yaml
+evaluation_interval: 1m
+tests:
+  - name: failing drill fires after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'drillbook_drill_passed{drill="kubelet-stopped", alert="KubeNodeNotReady"}'
+        values: '0x30'
+      - series: 'drillbook_drill_last_run_timestamp_seconds{drill="kubelet-stopped", alert="KubeNodeNotReady"}'
+        values: '0x30'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: DrillbookDrillFailing
+        exp_alerts: []
+      - eval_time: 20m
+        alertname: DrillbookDrillFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, drill: kubelet-stopped, alert: KubeNodeNotReady}
+            exp_annotations:
+              summary: Drill kubelet-stopped did not pass on its latest run
+              description: The latest run of kubelet-stopped (KubeNodeNotReady) did not pass. Its alert or runbook may not work.
+              runbook_url: https://github.com/VivianSobers/drillbook/blob/main/runbooks/drillbook/DrillbookDrillFailing.md
+  - name: stale after eight days without a pass
+    # One sample a minute: with sparser samples the 5m lookback leaves gaps
+    # that reset the alert's `for` clock.
+    interval: 1m
+    input_series:
+      # last success at t=0; the series stays flat for ten days
+      - series: 'drillbook_drill_last_success_timestamp_seconds{drill="d", alert="A"}'
+        values: '0x14400'
+      - series: 'drillbook_drill_last_run_timestamp_seconds{drill="d", alert="A"}'
+        values: '0x14400'
+    alert_rule_test:
+      - eval_time: 7d
+        alertname: DrillbookDrillStale
+        exp_alerts: []
+      - eval_time: 9d
+        alertname: DrillbookDrillStale
+        exp_alerts:
+          - exp_labels: {severity: warning, drill: d, alert: A}
+            exp_annotations:
+              summary: Drill d has not passed in over 8 days
+              description: "A and its runbook are unverified: the last passing drill was 9d 0h 0m 0s ago."
+              runbook_url: https://github.com/VivianSobers/drillbook/blob/main/runbooks/drillbook/DrillbookDrillStale.md
+  - name: missing metrics fire after six hours
+    interval: 1h
+    input_series:
+      - series: 'up{job="node-exporter"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 7h
+        alertname: DrillbookMetricsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: No drillbook metrics
+              description: Either no drill has ever run, or `drillbook report --format prometheus` is not writing into the textfile collector directory.
+              runbook_url: https://github.com/VivianSobers/drillbook/blob/main/runbooks/drillbook/DrillbookMetricsMissing.md
