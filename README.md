@@ -70,3 +70,30 @@ bin/drillbook plan kubelet-stopped # show what a drill would do
 bin/drillbook run shop-api-scaled-to-zero
 env/down.sh                        # remove the environment
 ```
+
+## Writing a runbook
+
+Runbooks stay ordinary markdown for people. drillbook only reads fenced code blocks that carry a `drill` attribute, written in [Runme](https://runme.dev)'s attribute syntax so the same file stays runnable in Runme:
+
+~~~markdown
+## Diagnose
+
+```sh {"name":"usage","drill":"check","target":"node"}
+df -h "$MOUNTPOINT"
+```
+
+## Fix
+
+```sh {"name":"delete-rotated-logs","drill":"fix","target":"node"}
+find "$MOUNTPOINT" -xdev -type f -name '*.log.[0-9]*' -print -delete
+```
+~~~
+
+| Attribute | Values |
+|---|---|
+| `drill` | `check` (diagnostics, must exit 0) or `fix` |
+| `target` | `runner` (default, where drillbook runs), `node` (the drill's host, over Ansible) or `host:<inventory-name>` |
+| `timeout` | Per block, default `5m` |
+| `name` | Used in drill files and logs |
+
+Blocks run under `bash -euo pipefail` with the drill's `target.env` exported, so a runbook can say `"$NODE"` where a person would type the node name.
