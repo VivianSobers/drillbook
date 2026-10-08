@@ -1,0 +1,19 @@
+# The kubelet on a worker stops. KubeNodeNotReady should fire and reach the
+# platform on-call; restarting the kubelet fixes it.
+alert: KubeNodeNotReady
+runbook: ../runbooks/kubernetes/KubeNodeNotReady.md
+target:
+  host: drillbook-worker
+  labels: {node: drillbook-worker}
+  env: {NODE: drillbook-worker}
+fault:
+  ansible:
+    role: drillbook.faults.stop_service
+    vars: {stop_service_name: kubelet}
+  revert_after: 50m
+fire_within: 25m
+resolve_within: 10m
+expected_resolve: 5m
+expect:
+  receiver: platform-oncall
+schedule: weekly
