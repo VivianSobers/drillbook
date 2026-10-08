@@ -35,6 +35,8 @@ func TestDecide(t *testing.T) {
 		{"pass without expected resolve", func(o *Observations) { o.ExpectedResolve = 0; o.ResolvedAfter = time.Hour }, Pass, ""},
 		{"aborted", func(o *Observations) { *o = Observations{Aborted: true, AbortReason: "alert already firing"} }, Aborted, "alert already firing"},
 		{"aborted wins over everything", func(o *Observations) { o.Aborted = true; o.AbortReason = "interrupted"; o.FailedStep = "restart" }, Aborted, "interrupted"},
+		{"revert failed beats everything but abort", func(o *Observations) { o.RevertFailed = "no route to host"; o.FailedStep = "x" }, RevertFailed, "no route to host"},
+		{"revert failed after alert did not fire", func(o *Observations) { *o = Observations{RevertFailed: "boom"} }, RevertFailed, "boom"},
 		{"alert did not fire", func(o *Observations) { *o = Observations{Fired: false} }, AlertDidNotFire, "did not fire"},
 		{"misrouted", func(o *Observations) { o.Receivers = []string{"null"} }, Misrouted, `expected receiver "platform-oncall", got [null]`},
 		{"never reached alertmanager", func(o *Observations) { o.Receivers = nil }, Misrouted, "got []"},
@@ -72,7 +74,7 @@ func TestVerdictPassed(t *testing.T) {
 	if !Pass.Passed() {
 		t.Error("pass must count as passed")
 	}
-	for _, v := range []Verdict{Aborted, AlertDidNotFire, Misrouted, StepFailed, NotResolved, SlowerThanRunbook, Inconclusive} {
+	for _, v := range []Verdict{RevertFailed, Aborted, AlertDidNotFire, Misrouted, StepFailed, NotResolved, SlowerThanRunbook, Inconclusive} {
 		if v.Passed() {
 			t.Errorf("%s must not count as passed", v)
 		}

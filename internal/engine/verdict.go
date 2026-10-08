@@ -17,6 +17,9 @@ const (
 	SlowerThanRunbook Verdict = "slower-than-runbook"
 	Inconclusive      Verdict = "inconclusive"
 	Aborted           Verdict = "aborted"
+	// RevertFailed means drillbook could not undo its own fault: the target
+	// may still be broken and needs `drillbook abort` or a person.
+	RevertFailed Verdict = "revert-failed"
 )
 
 func (v Verdict) Passed() bool { return v == Pass }
@@ -25,6 +28,8 @@ func (v Verdict) Passed() bool { return v == Pass }
 type Observations struct {
 	Aborted     bool
 	AbortReason string
+	// RevertFailed holds the error from undoing the fault, if any.
+	RevertFailed string
 
 	Fired      bool
 	FiredAfter time.Duration
@@ -45,20 +50,24 @@ type Observations struct {
 
 // Decide turns observations into one verdict plus every finding that applies.
 // When several verdicts apply, the most serious wins, in this order:
-// aborted, alert-did-not-fire, misrouted, step-failed, not-resolved,
+// aborted, revert-failed, alert-did-not-fire, misrouted, step-failed, not-resolved,
 // slower-than-runbook, inconclusive.
 func Decide(o Observations) (Verdict, []string) {
 	if o.Aborted {
 		return Aborted, []string{"aborted: " + o.AbortReason}
-	}
-	if !o.Fired {
-		return AlertDidNotFire, []string{"the fault was applied but the alert did not fire within fire_within"}
 	}
 	var findings []string
 	var verdicts []Verdict
 	note := func(v Verdict, f string) {
 		verdicts = append(verdicts, v)
 		findings = append(findings, f)
+	}
+	if o.RevertFailed != "" {
+		note(RevertFailed, "could not revert the fault, the target may still be broken: "+o.RevertFailed)
+	}
+	if !o.Fired {
+		note(AlertDidNotFire, "the fault was applied but the alert did not fire within fire_within")
+		return verdicts[0], findings
 	}
 	if o.ExpectedReceiver != "" && !slices.Contains(o.Receivers, o.ExpectedReceiver) {
 		note(Misrouted, fmt.Sprintf("expected receiver %q, got %v", o.ExpectedReceiver, nonNil(o.Receivers)))
