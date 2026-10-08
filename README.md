@@ -176,3 +176,8 @@ Results go to `.drillbook/results.jsonl`, and each drill keeps a full log under 
 - Alertmanager routes to two webhook receivers, `platform-oncall` and `shop-team`, that point at a closed port. Nobody gets paged, but the routing tree is real.
 
 The nodes share the host's kernel and clock, so clock faults cannot run in this environment.
+
+## CI
+
+- [ci.yml](.github/workflows/ci.yml) runs the Go tests and linters, ansible-lint, the fault role tests against a throwaway node container, `terraform validate`, the `promtool` rule tests, `pint` and `drillbook lint`.
+- [e2e.yml](.github/workflows/e2e.yml) builds the drill environment on the GitHub runner, checks the rules against its Prometheus with `pint`, and runs real drills: those affected by a pull request that fire within 20 minutes, or a chosen set on demand and every week.
