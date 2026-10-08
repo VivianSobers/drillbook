@@ -373,7 +373,7 @@ func (a *app) affectedCmd() *cobra.Command {
 func (a *app) abortCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "abort",
-		Short: "Revert every fault and delete every silence left by interrupted drills",
+		Short: "Revert faults and clear silences left by interrupted drills",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load(a.configPath)
 			if err != nil {
@@ -398,18 +398,10 @@ func (a *app) abortCmd() *cobra.Command {
 					failed++
 					continue
 				}
-				if err := eng.Faults.Revert(ctx, d, act.ID, a.out); err != nil {
-					fmt.Fprintf(a.out, "%s: revert failed: %v\n", act.ID, err)
+				if err := eng.Abort(ctx, d, act); err != nil {
+					fmt.Fprintf(a.out, "%s: %v\n", act.ID, err)
 					failed++
 					continue
-				}
-				if act.SilenceID != "" {
-					if err := eng.AM.DeleteSilence(ctx, act.SilenceID); err != nil {
-						fmt.Fprintf(a.out, "%s: delete silence %s: %v\n", act.ID, act.SilenceID, err)
-					}
-				}
-				if err := st.ClearActive(act.ID); err != nil {
-					return err
 				}
 				fmt.Fprintf(a.out, "%s: reverted\n", act.ID)
 			}

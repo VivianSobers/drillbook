@@ -590,3 +590,56 @@ func TestPrometheusErrorsDuringWaitAreLogged(t *testing.T) {
 		t.Fatalf("want the first query error logged once, got %d:\n%s", n, out.String())
 	}
 }
+
+func TestAbortKeepsSilenceWhileAlertStillFires(t *testing.T) {
+	w, e, st := setup(t)
+	w.stuckFiring = true
+	w.applies = 1
+	w.faultOn = true
+	w.silences["s1"] = true
+	act := state.Active{ID: "d-1", SilenceID: "s1"}
+	if err := st.MarkActive(act); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Abort(context.Background(), testDrill(t), act); err != nil {
+		t.Fatal(err)
+	}
+	if w.faultOn {
+		t.Error("abort must revert the fault")
+	}
+	if !w.silences["s1"] {
+		t.Error("deleting the silence while the alert fires would page someone")
+	}
+	if a, _ := st.Active(); len(a) != 0 {
+		t.Errorf("active record left behind: %v", a)
+	}
+}
+
+func TestAbortDeletesSilenceOnceAlertIsClear(t *testing.T) {
+	w, e, st := setup(t)
+	w.faultOn = true
+	w.silences["s1"] = true
+	act := state.Active{ID: "d-1", SilenceID: "s1"}
+	if err := st.MarkActive(act); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Abort(context.Background(), testDrill(t), act); err != nil {
+		t.Fatal(err)
+	}
+	assertCleanedUp(t, w, st)
+}
+
+func TestAbortKeepsRecordWhenRevertFails(t *testing.T) {
+	w, e, st := setup(t)
+	e.Faults = failingRevert{wfault{w}}
+	act := state.Active{ID: "d-1", SilenceID: "s1"}
+	if err := st.MarkActive(act); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Abort(context.Background(), testDrill(t), act); err == nil {
+		t.Fatal("a failed revert must be an error")
+	}
+	if a, _ := st.Active(); len(a) != 1 {
+		t.Errorf("the active record must stay for the next abort: %v", a)
+	}
+}

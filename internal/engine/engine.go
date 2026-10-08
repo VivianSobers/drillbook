@@ -413,3 +413,30 @@ func interrupted(err error) string {
 	}
 	return err.Error()
 }
+
+// Abort reverts the fault of a drill that was interrupted and deletes its
+// silence, unless the alert is still firing or Prometheus cannot say: then the
+// silence is left to expire on its own so the cleanup does not page anyone.
+// The active record is kept when the revert fails, for the next abort.
+func (e *Engine) Abort(ctx context.Context, d *drill.Drill, a state.Active) error {
+	say := func(format string, args ...any) {
+		if e.Out != nil {
+			fmt.Fprintf(e.Out, "%s: %s\n", a.ID, fmt.Sprintf(format, args...))
+		}
+	}
+	if err := e.Faults.Revert(ctx, d, a.ID, e.Out); err != nil {
+		return fmt.Errorf("revert failed: %w", err)
+	}
+	if a.SilenceID != "" {
+		firing, err := e.Prom.Firing(ctx, d.Alert, d.Target.Labels)
+		switch {
+		case err != nil:
+			say("cannot ask Prometheus whether %s cleared (%v); left silence %s to expire", d.Alert, err, a.SilenceID)
+		case firing:
+			say("%s is still firing; left silence %s to expire", d.Alert, a.SilenceID)
+		default:
+			e.deleteSilence(a.SilenceID, say)
+		}
+	}
+	return e.State.ClearActive(a.ID)
+}
