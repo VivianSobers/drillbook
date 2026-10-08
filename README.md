@@ -134,3 +134,27 @@ fault:
       body:
         - {op: add, path: /spec/template/spec/containers/0/args/-, value: --cache-size=512}
 ```
+
+## Faults
+
+Host faults are in the `drillbook.faults` Ansible collection under [ansible/collections](ansible/collections/ansible_collections/drillbook/faults). Each role arms a `systemd-run` timer on the host before it changes anything, so a runner that crashes mid-drill never leaves a machine broken.
+
+| Fault | What it does |
+|---|---|
+| `drillbook.faults.stop_service` | Stops a systemd unit. Refuses `ssh` and `sshd`. |
+| `drillbook.faults.fill_filesystem` | Fills a filesystem to a set free percentage with one file. Refuses filesystems over 2 GiB by default. |
+| `drillbook.faults.stop_container` | Stops a Docker container, for hosts that run services with Docker or Compose. |
+| `kube` with `scale` | Scales a Deployment. |
+| `kube` with `patch` | Patches a Deployment with a JSON, merge or strategic patch. |
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `drillbook run <drill...>` or `--all` | Runs drills, prints a summary, exits 1 unless every drill passed |
+| `drillbook plan <drill>` | Shows the fault, silence, waits and runbook blocks without running anything |
+| `drillbook lint [--rules glob]` | Validates drills and runbooks; with `--rules`, every alert rule must carry `runbook_url` |
+| `drillbook affected <git-range> [--max-fire-within 20m]` | Lists drills whose drill file, runbook or alert rule changed |
+| `drillbook abort` | Reverts faults and deletes silences left by interrupted drills |
+
+Results go to `.drillbook/results.jsonl`, and each drill keeps a full log under `.drillbook/logs/`.
