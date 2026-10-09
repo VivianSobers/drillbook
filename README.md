@@ -230,7 +230,7 @@ runbooks/                runbooks for kube-prometheus-stack alerts
 examples/shop/           demo service, its alert rules, promtool tests and runbook
 env/                     Terraform and Ansible for the drill environment
 tests/roles/             fault role tests
-docs/                    design spec, implementation plan, drill results
+docs/                    drill results
 ```
 
 ## License
